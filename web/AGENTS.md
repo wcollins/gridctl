@@ -107,6 +107,15 @@ Do not use flat solid backgrounds for containers. Use the glass utility classes.
 *   **Edge Style:** Purple dashed line (`strokeDasharray: '5,5'`)
 *   **Layout:** Positioned to the right of gateway (start angle: 0)
 
+### A2A Agent Node
+*   **Shape:** Rounded square (`rounded-lg`, 144x144px)
+*   **Color:** Secondary (Teal) accents with `shadow-glow-secondary`
+*   **Icon:** Users icon from Lucide
+*   **Content:** Name, role badge (local/remote), skill count, status indicator
+*   **Edge Style:** Teal dashed line (`strokeDasharray: '8,4'`, strokeWidth: 2)
+*   **Layout:** Positioned to the left of gateway (start angle: π)
+*   **Role Badge:** Shows "local" or "remote" in top-right corner
+
 ## 8. Implementation Checklist
 When creating new UI components:
 1.  [ ] Are you using `tailwind.config.js` colors instead of hardcoded hex values?
