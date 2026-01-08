@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"agentlab/pkg/a2a"
 	"agentlab/pkg/dockerclient"
 	"agentlab/pkg/mcp"
 	"agentlab/pkg/runtime"
@@ -21,6 +22,7 @@ type Server struct {
 	gateway      *mcp.Gateway
 	mcpHandler   *mcp.Handler
 	sseServer    *mcp.SSEServer
+	a2aGateway   *a2a.Gateway
 	staticFS     fs.FS
 	dockerClient dockerclient.DockerClient
 	topologyName string
@@ -34,6 +36,16 @@ func NewServer(gateway *mcp.Gateway, staticFS fs.FS) *Server {
 		sseServer:  mcp.NewSSEServer(gateway),
 		staticFS:   staticFS,
 	}
+}
+
+// SetA2AGateway sets the A2A gateway for agent-to-agent communication.
+func (s *Server) SetA2AGateway(a2aGateway *a2a.Gateway) {
+	s.a2aGateway = a2aGateway
+}
+
+// A2AGateway returns the A2A gateway.
+func (s *Server) A2AGateway() *a2a.Gateway {
+	return s.a2aGateway
 }
 
 // SetDockerClient sets the Docker client for container operations.
@@ -54,6 +66,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/mcp", s.mcpHandler)                       // POST JSON-RPC
 	mux.Handle("/sse", s.sseServer)                        // GET SSE connection
 	mux.HandleFunc("/message", s.sseServer.HandleMessage)  // POST message for SSE
+
+	// A2A endpoints
+	if s.a2aGateway != nil {
+		mux.HandleFunc("/.well-known/agent.json", s.handleA2AAgentCards)
+		mux.Handle("/a2a/", s.a2aGateway.Handler())
+		mux.HandleFunc("/api/a2a-agents", s.handleA2AAgentsList)
+	}
 
 	// API endpoints
 	mux.HandleFunc("/api/status", s.handleStatus)
@@ -80,10 +99,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := struct {
-		Gateway    ServerInfo        `json:"gateway"`
-		MCPServers []MCPServerStatus `json:"mcp-servers"`
-		Agents     []AgentStatus     `json:"agents"`
-		Resources  []ResourceStatus  `json:"resources"`
+		Gateway    ServerInfo           `json:"gateway"`
+		MCPServers []MCPServerStatus    `json:"mcp-servers"`
+		Agents     []AgentStatus        `json:"agents"`
+		Resources  []ResourceStatus     `json:"resources"`
+		A2AAgents  []a2a.A2AAgentStatus `json:"a2a-agents,omitempty"`
 	}{
 		Gateway: ServerInfo{
 			Name:    s.gateway.ServerInfo().Name,
@@ -94,7 +114,47 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		Resources:  s.getResourceStatuses(),
 	}
 
+	if s.a2aGateway != nil {
+		status.A2AAgents = s.a2aGateway.Status()
+	}
+
 	writeJSON(w, status)
+}
+
+// handleA2AAgentCards returns all agent cards for A2A discovery.
+func (s *Server) handleA2AAgentCards(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.a2aGateway == nil {
+		http.Error(w, "A2A not enabled", http.StatusNotFound)
+		return
+	}
+
+	cards := s.a2aGateway.Handler().ListLocalAgents()
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]any{
+		"agents": cards,
+	}
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+// handleA2AAgentsList returns status of all A2A agents.
+func (s *Server) handleA2AAgentsList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.a2aGateway == nil {
+		writeJSON(w, []a2a.A2AAgentStatus{})
+		return
+	}
+
+	writeJSON(w, s.a2aGateway.Status())
 }
 
 // handleMCPServers returns information about registered MCP servers.
