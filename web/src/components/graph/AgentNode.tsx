@@ -14,12 +14,12 @@ const AgentNode = memo(({ data, selected }: AgentNodeProps) => {
   return (
     <div
       className={cn(
-        'w-32 h-32 overflow-hidden rounded-full',
+        'w-32 h-32 rounded-full',
         'backdrop-blur-xl border-2 transition-all duration-300 ease-out',
         'bg-gradient-to-br from-surface/95 to-tertiary/[0.05]',
         'flex flex-col items-center justify-center text-center',
         selected && 'border-tertiary shadow-glow-tertiary ring-2 ring-tertiary/30',
-        !selected && 'border-tertiary/30 hover:shadow-node-hover hover:border-tertiary/50 hover:-translate-y-1'
+        !selected && 'border-tertiary/30 hover:shadow-node-hover hover:border-tertiary/50'
       )}
     >
       {/* Pulse ring for running agents */}
@@ -61,10 +61,10 @@ const AgentNode = memo(({ data, selected }: AgentNodeProps) => {
         </div>
       )}
 
-      {/* Connection Handles */}
+      {/* Connection Handles - flow: gateway (left) → agent (right) */}
       <Handle
         type="target"
-        position={Position.Right}
+        position={Position.Left}
         className={cn(
           '!w-2.5 !h-2.5 !border-2 !border-background !rounded-full',
           '!bg-tertiary',
@@ -74,7 +74,7 @@ const AgentNode = memo(({ data, selected }: AgentNodeProps) => {
       />
       <Handle
         type="source"
-        position={Position.Left}
+        position={Position.Right}
         className={cn(
           '!w-2.5 !h-2.5 !border-2 !border-background !rounded-full',
           '!bg-tertiary',
