@@ -9,9 +9,7 @@
 # Usage:
 #   agentlab deploy examples/agent-demo.yaml -f
 #
-# Testing:
-#   See TEST.md for comprehensive testing steps
-
+#
 version: "1"
 name: agent-demo
 
