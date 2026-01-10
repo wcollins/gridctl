@@ -97,18 +97,20 @@ export function transformToNodesAndEdges(
         status: getMCPServerStatus(server),
         external: server.external,
         localProcess: server.localProcess,
+        ssh: server.ssh,
+        sshHost: server.sshHost,
       },
       draggable: true,
     };
     nodes.push(serverNode);
 
-    // Edge: Gateway -> MCP Server
+    // Edge: Gateway -> MCP Server (violet to match target node)
     edges.push({
       id: `edge-gateway-${server.name}`,
       source: GATEWAY_NODE_ID,
       target: nodeId,
       animated: server.initialized,
-      markerEnd: { ...arrowMarker, color: COLORS.primary },
+      markerEnd: { ...arrowMarker, color: COLORS.external },
     });
   });
 
