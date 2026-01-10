@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Terminal, Box, Hash, Globe, Wifi, Server, Cpu } from 'lucide-react';
+import { Terminal, Box, Hash, Globe, Wifi, Server, Cpu, KeyRound } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { Badge } from '../ui/Badge';
 import { StatusDot } from '../ui/StatusDot';
@@ -18,12 +18,10 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const isServer = data.type === 'mcp-server';
   const isExternal = isServer && (data as MCPServerNodeData).external;
   const isLocalProcess = isServer && (data as MCPServerNodeData).localProcess;
+  const isSSH = isServer && (data as MCPServerNodeData).ssh;
 
-  // External and local process servers share the same violet styling
-  const isNonContainer = isExternal || isLocalProcess;
-
-  // Choose icon - Globe for external, Cpu for local process, Terminal for container-based
-  const Icon = isServer ? (isExternal ? Globe : isLocalProcess ? Cpu : Terminal) : Box;
+  // Choose icon - Globe for external, Cpu for local process, KeyRound for SSH, Terminal for container-based
+  const Icon = isServer ? (isExternal ? Globe : isLocalProcess ? Cpu : isSSH ? KeyRound : Terminal) : Box;
 
   // Get transport info for MCP servers
   const transport = isServer ? (data as MCPServerNodeData).transport : null;
@@ -45,13 +43,10 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
       className={cn(
         'w-64 rounded-xl relative',
         'backdrop-blur-xl border transition-all duration-300 ease-out',
-        isServer && !isNonContainer
-          ? 'bg-gradient-to-br from-surface/95 to-primary/[0.02] border-border/50'
-          : isServer && isNonContainer
+        isServer
           ? 'bg-gradient-to-br from-surface/95 to-violet-500/[0.03] border-violet-500/30'
           : 'bg-gradient-to-br from-surface/95 to-secondary/[0.02] border-border/50',
-        selected && isServer && !isNonContainer && 'border-primary shadow-glow-primary ring-1 ring-primary/30',
-        selected && isServer && isNonContainer && 'border-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.3)] ring-1 ring-violet-500/30',
+        selected && isServer && 'border-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.3)] ring-1 ring-violet-500/30',
         selected && !isServer && 'border-secondary shadow-glow-secondary ring-1 ring-secondary/30',
         !selected && 'hover:shadow-node-hover hover:border-text-muted/30'
       )}
@@ -60,16 +55,14 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
       {/* Header with gradient accent */}
       <div className={cn(
         'px-3 py-2.5 flex items-center justify-between border-b relative',
-        isServer && !isNonContainer ? 'border-primary/10 bg-primary/[0.03]' :
-        isServer && isNonContainer ? 'border-violet-500/10 bg-violet-500/[0.03]' :
-        'border-secondary/10 bg-secondary/[0.03]'
+        isServer
+          ? 'border-violet-500/10 bg-violet-500/[0.03]'
+          : 'border-secondary/10 bg-secondary/[0.03]'
       )}>
         {/* Accent line */}
         <div className={cn(
           'absolute top-0 left-0 right-0 h-px',
-          isServer && !isNonContainer
-            ? 'bg-gradient-to-r from-transparent via-primary/40 to-transparent'
-            : isServer && isNonContainer
+          isServer
             ? 'bg-gradient-to-r from-transparent via-violet-500/40 to-transparent'
             : 'bg-gradient-to-r from-transparent via-secondary/40 to-transparent'
         )} />
@@ -77,18 +70,14 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={cn(
             'p-1.5 rounded-lg border',
-            isServer && !isNonContainer
-              ? 'bg-primary/10 border-primary/20'
-              : isServer && isNonContainer
+            isServer
               ? 'bg-violet-500/10 border-violet-500/20'
               : 'bg-secondary/10 border-secondary/20'
           )}>
             <Icon
               size={14}
               className={cn(
-                isServer && !isNonContainer ? 'text-primary' :
-                isServer && isNonContainer ? 'text-violet-400' :
-                'text-secondary'
+                isServer ? 'text-violet-400' : 'text-secondary'
               )}
             />
           </div>
@@ -120,7 +109,7 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         {isServer && !hasValidEndpoint && hasValidContainerId && (
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
-              <Hash size={10} className="text-primary" />
+              <Hash size={10} className="text-violet-400" />
               <span className="text-[10px] uppercase tracking-widest font-medium text-text-muted">
                 Container
               </span>
@@ -171,11 +160,21 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           </div>
         )}
 
-        {/* Status Badge + External/Local indicator */}
+        {/* Status Badge + Type indicator */}
         <div className="pt-1 flex items-center gap-2">
           <Badge status={data.status}>
             <span className="capitalize">{data.status}</span>
           </Badge>
+          {isServer && !isExternal && !isLocalProcess && !isSSH && (
+            <div className={cn(
+              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
+              'text-[10px] font-semibold tracking-wide',
+              'text-text-muted border-border/50'
+            )}>
+              <Terminal size={10} />
+              Container
+            </div>
+          )}
           {isExternal && (
             <div className={cn(
               'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
@@ -196,16 +195,26 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               Local
             </div>
           )}
+          {isSSH && (
+            <div className={cn(
+              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
+              'text-[10px] font-semibold tracking-wide',
+              'text-text-muted border-border/50'
+            )}>
+              <KeyRound size={10} />
+              SSH
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Connection Handles */}
+      {/* Connection Handles - match node color */}
       <Handle
         type="target"
         position={Position.Left}
         className={cn(
           '!w-2.5 !h-2.5 !border-2 !border-background !rounded-full',
-          isServer ? '!bg-primary' : '!bg-secondary',
+          isServer ? '!bg-violet-500' : '!bg-secondary',
           'transition-all duration-200 hover:!scale-125'
         )}
         id="input"
@@ -215,7 +224,7 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         position={Position.Right}
         className={cn(
           '!w-2.5 !h-2.5 !border-2 !border-background !rounded-full',
-          isServer ? '!bg-primary' : '!bg-secondary',
+          isServer ? '!bg-violet-500' : '!bg-secondary',
           'transition-all duration-200 hover:!scale-125'
         )}
         id="output"
