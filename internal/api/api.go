@@ -594,12 +594,23 @@ func (s *Server) handleAgentStop(w http.ResponseWriter, r *http.Request, agentNa
 	writeJSON(w, map[string]string{"status": "stopped", "agent": agentName})
 }
 
-// handleHealth returns 200 OK if the server is running.
+// handleHealth returns 200 OK only when all MCP servers are connected and initialized.
+// This is used by the deploy command to verify the daemon is fully ready.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Check all MCP servers are initialized
+	for _, status := range s.gateway.Status() {
+		if !status.Initialized {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("MCP server not initialized: " + status.Name))
+			return
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
 }
