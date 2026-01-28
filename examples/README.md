@@ -1,6 +1,6 @@
 # Examples
 
-Example topologies demonstrating Gridctl patterns and capabilities.
+Example stacks demonstrating Gridctl patterns and capabilities.
 
 ## 🚀 Quick Start
 
@@ -21,7 +21,7 @@ gridctl deploy examples/getting-started/agent-basic.yaml
 
 ## 🎬 Recommended Path
 
-1. **Start here**: `getting-started/agent-basic.yaml` - topology, networking, access control (placeholder containers)
+1. **Start here**: `getting-started/agent-basic.yaml` - stack, networking, access control (placeholder containers)
 2. **Real MCP servers**: `transports/local-mcp.yaml` - actual MCP server logic via stdio transport
 3. **Multi-agent**: `multi-agent/multi-agent-skills.yaml` - agents using other agents as tools
 4. **Platforms**: `platforms/github-mcp.yaml` - third-party MCP servers
@@ -51,7 +51,7 @@ gridctl deploy examples/getting-started/agent-basic.yaml
 All examples follow the same deployment pattern:
 
 ```bash
-# Deploy a topology
+# Deploy a stack
 gridctl deploy examples/<category>/<file>.yaml
 
 # Force recreate containers
