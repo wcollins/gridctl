@@ -12,9 +12,9 @@ import (
 	"github.com/gridctl/gridctl/pkg/runtime"
 )
 
-// TestFullTopologyLifecycle tests the complete lifecycle of a topology.
+// TestFullStackLifecycle tests the complete lifecycle of a stack.
 // This test requires a running Docker daemon.
-func TestFullTopologyLifecycle(t *testing.T) {
+func TestFullStackLifecycle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -29,8 +29,8 @@ func TestFullTopologyLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Create a simple topology
-	topo := &config.Topology{
+	// Create a simple stack
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "integration-test",
 		Network: config.Network{
@@ -48,7 +48,7 @@ func TestFullTopologyLifecycle(t *testing.T) {
 		},
 	}
 
-	// Start the topology
+	// Start the stack
 	result, err := rt.Up(ctx, topo, runtime.UpOptions{BasePort: 19000})
 	if err != nil {
 		t.Fatalf("Up() error = %v", err)
@@ -68,7 +68,7 @@ func TestFullTopologyLifecycle(t *testing.T) {
 		t.Errorf("expected 1 container in status, got %d", len(statuses))
 	}
 
-	// Stop the topology
+	// Stop the stack
 	if err := rt.Down(ctx, "integration-test"); err != nil {
 		t.Fatalf("Down() error = %v", err)
 	}
@@ -83,8 +83,8 @@ func TestFullTopologyLifecycle(t *testing.T) {
 	}
 }
 
-// TestTopologyWithResources tests a topology with both MCP servers and resources.
-func TestTopologyWithResources(t *testing.T) {
+// TestStackWithResources tests a stack with both MCP servers and resources.
+func TestStackWithResources(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -98,7 +98,7 @@ func TestTopologyWithResources(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "integration-resources",
 		Network: config.Network{
@@ -124,7 +124,7 @@ func TestTopologyWithResources(t *testing.T) {
 		},
 	}
 
-	// Start topology
+	// Start stack
 	_, err = rt.Up(ctx, topo, runtime.UpOptions{BasePort: 19100})
 	if err != nil {
 		t.Fatalf("Up() error = %v", err)
@@ -160,7 +160,7 @@ func TestMultipleNetworks(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "integration-multinetwork",
 		Networks: []config.Network{
@@ -185,7 +185,7 @@ func TestMultipleNetworks(t *testing.T) {
 		},
 	}
 
-	// Start topology
+	// Start stack
 	result, err := rt.Up(ctx, topo, runtime.UpOptions{BasePort: 19200})
 	if err != nil {
 		t.Fatalf("Up() error = %v", err)
