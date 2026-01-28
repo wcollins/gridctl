@@ -12,17 +12,17 @@ import '@xyflow/react/dist/style.css';
 import { RotateCcw, Spline, Minus, Plus, Maximize } from 'lucide-react';
 
 import { nodeTypes } from './nodeTypes';
-import { useTopologyStore } from '../../stores/useTopologyStore';
+import { useStackStore } from '../../stores/useStackStore';
 import { useUIStore } from '../../stores/useUIStore';
 import { COLORS } from '../../lib/constants';
 
 export function Canvas() {
-  const nodes = useTopologyStore((s) => s.nodes);
-  const edges = useTopologyStore((s) => s.edges);
-  const onNodesChange = useTopologyStore((s) => s.onNodesChange);
-  const onEdgesChange = useTopologyStore((s) => s.onEdgesChange);
-  const selectNode = useTopologyStore((s) => s.selectNode);
-  const resetLayout = useTopologyStore((s) => s.resetLayout);
+  const nodes = useStackStore((s) => s.nodes);
+  const edges = useStackStore((s) => s.edges);
+  const onNodesChange = useStackStore((s) => s.onNodesChange);
+  const onEdgesChange = useStackStore((s) => s.onEdgesChange);
+  const selectNode = useStackStore((s) => s.selectNode);
+  const resetLayout = useStackStore((s) => s.resetLayout);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const edgeStyle = useUIStore((s) => s.edgeStyle);
   const toggleEdgeStyle = useUIStore((s) => s.toggleEdgeStyle);
