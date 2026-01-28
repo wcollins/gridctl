@@ -48,7 +48,7 @@ type UpOptions struct {
 	GatewayPort int  // Port for MCP gateway (for agent MCP_ENDPOINT injection)
 }
 
-// UpResult contains the result of starting a topology.
+// UpResult contains the result of starting a stack.
 type UpResult struct {
 	MCPServers []MCPServerResult
 	Agents     []AgentResult
@@ -108,8 +108,8 @@ func (o *Orchestrator) Runtime() WorkloadRuntime {
 	return o.runtime
 }
 
-// Up starts all MCP servers and resources defined in the topology.
-func (o *Orchestrator) Up(ctx context.Context, topo *config.Topology, opts UpOptions) (*UpResult, error) {
+// Up starts all MCP servers and resources defined in the stack.
+func (o *Orchestrator) Up(ctx context.Context, stack *config.Stack, opts UpOptions) (*UpResult, error) {
 	// Check runtime
 	if err := o.runtime.Ping(ctx); err != nil {
 		return nil, err
@@ -119,34 +119,34 @@ func (o *Orchestrator) Up(ctx context.Context, topo *config.Topology, opts UpOpt
 		opts.BasePort = 9000
 	}
 
-	o.logger.Info("starting topology", "name", topo.Name)
+	o.logger.Info("starting stack", "name", stack.Name)
 
 	// Create network(s)
-	if len(topo.Networks) > 0 {
+	if len(stack.Networks) > 0 {
 		// Advanced mode: create multiple networks
-		for _, net := range topo.Networks {
+		for _, net := range stack.Networks {
 			o.logger.Info("creating network", "name", net.Name)
 			if err := o.runtime.EnsureNetwork(ctx, net.Name, NetworkOptions{
-				Driver:   net.Driver,
-				Topology: topo.Name,
+				Driver: net.Driver,
+				Stack:  stack.Name,
 			}); err != nil {
 				return nil, fmt.Errorf("ensuring network %s: %w", net.Name, err)
 			}
 		}
 	} else {
 		// Simple mode: single network
-		o.logger.Info("creating network", "name", topo.Network.Name)
-		if err := o.runtime.EnsureNetwork(ctx, topo.Network.Name, NetworkOptions{
-			Driver:   topo.Network.Driver,
-			Topology: topo.Name,
+		o.logger.Info("creating network", "name", stack.Network.Name)
+		if err := o.runtime.EnsureNetwork(ctx, stack.Network.Name, NetworkOptions{
+			Driver: stack.Network.Driver,
+			Stack:  stack.Name,
 		}); err != nil {
 			return nil, fmt.Errorf("ensuring network: %w", err)
 		}
 	}
 
 	// Start resources first (databases, etc.)
-	for _, res := range topo.Resources {
-		if err := o.startResource(ctx, topo, &res); err != nil {
+	for _, res := range stack.Resources {
+		if err := o.startResource(ctx, stack, &res); err != nil {
 			return nil, fmt.Errorf("starting resource %s: %w", res.Name, err)
 		}
 	}
@@ -154,7 +154,7 @@ func (o *Orchestrator) Up(ctx context.Context, topo *config.Topology, opts UpOpt
 	// Start MCP servers and collect info
 	result := &UpResult{}
 	containerIndex := 0 // Track container-based servers for port allocation
-	for _, server := range topo.MCPServers {
+	for _, server := range stack.MCPServers {
 		// Skip container creation for external servers
 		if server.IsExternal() {
 			o.logger.Info("registering external MCP server", "name", server.Name, "url", server.URL)
@@ -198,7 +198,7 @@ func (o *Orchestrator) Up(ctx context.Context, topo *config.Topology, opts UpOpt
 
 		hostPort := opts.BasePort + containerIndex
 		containerIndex++
-		info, err := o.startMCPServer(ctx, topo, &server, opts, hostPort)
+		info, err := o.startMCPServer(ctx, stack, &server, opts, hostPort)
 		if err != nil {
 			return nil, fmt.Errorf("starting MCP server %s: %w", server.Name, err)
 		}
@@ -206,13 +206,13 @@ func (o *Orchestrator) Up(ctx context.Context, topo *config.Topology, opts UpOpt
 	}
 
 	// Start agents in dependency order (topologically sorted)
-	sortedAgents, err := sortAgentsByDependency(topo)
+	sortedAgents, err := sortAgentsByDependency(stack)
 	if err != nil {
 		return nil, fmt.Errorf("resolving agent dependencies: %w", err)
 	}
 
 	for _, agent := range sortedAgents {
-		info, err := o.startAgent(ctx, topo, &agent, opts)
+		info, err := o.startAgent(ctx, stack, &agent, opts)
 		if err != nil {
 			return nil, fmt.Errorf("starting agent %s: %w", agent.Name, err)
 		}
@@ -223,8 +223,8 @@ func (o *Orchestrator) Up(ctx context.Context, topo *config.Topology, opts UpOpt
 	return result, nil
 }
 
-func (o *Orchestrator) startMCPServer(ctx context.Context, topo *config.Topology, server *config.MCPServer, opts UpOptions, hostPort int) (*MCPServerResult, error) {
-	containerName := containerName(topo.Name, server.Name)
+func (o *Orchestrator) startMCPServer(ctx context.Context, stack *config.Stack, server *config.MCPServer, opts UpOptions, hostPort int) (*MCPServerResult, error) {
+	containerName := containerName(stack.Name, server.Name)
 
 	// Check if container already exists
 	exists, workloadID, err := o.runtime.Exists(ctx, containerName)
@@ -256,7 +256,7 @@ func (o *Orchestrator) startMCPServer(ctx context.Context, topo *config.Topology
 			Ref:        server.Source.Ref,
 			Path:       server.Source.Path,
 			Dockerfile: server.Source.Dockerfile,
-			Tag:        generateTag(topo.Name, server.Name),
+			Tag:        generateTag(stack.Name, server.Name),
 			BuildArgs:  server.BuildArgs,
 			NoCache:    opts.NoCache,
 		}
@@ -277,8 +277,8 @@ func (o *Orchestrator) startMCPServer(ctx context.Context, topo *config.Topology
 	}
 
 	// Determine network name
-	networkName := topo.Network.Name
-	if len(topo.Networks) > 0 && server.Network != "" {
+	networkName := stack.Network.Name
+	if len(stack.Networks) > 0 && server.Network != "" {
 		networkName = server.Network
 	}
 
@@ -286,7 +286,7 @@ func (o *Orchestrator) startMCPServer(ctx context.Context, topo *config.Topology
 	// Note: Name is the logical name, the runtime generates the container name
 	cfg := WorkloadConfig{
 		Name:        server.Name,
-		Topology:    topo.Name,
+		Stack:       stack.Name,
 		Type:        WorkloadTypeMCPServer,
 		Image:       imageName,
 		Command:     server.Command,
@@ -295,7 +295,7 @@ func (o *Orchestrator) startMCPServer(ctx context.Context, topo *config.Topology
 		ExposedPort: server.Port,
 		HostPort:    hostPort,
 		Transport:   server.Transport,
-		Labels:      managedLabels(topo.Name, server.Name, true),
+		Labels:      managedLabels(stack.Name, server.Name, true),
 	}
 
 	status, err := o.runtime.Start(ctx, cfg)
@@ -319,8 +319,8 @@ func (o *Orchestrator) startMCPServer(ctx context.Context, topo *config.Topology
 	}, nil
 }
 
-func (o *Orchestrator) startResource(ctx context.Context, topo *config.Topology, res *config.Resource) error {
-	containerName := containerName(topo.Name, res.Name)
+func (o *Orchestrator) startResource(ctx context.Context, stack *config.Stack, res *config.Resource) error {
+	containerName := containerName(stack.Name, res.Name)
 
 	// Check if container already exists
 	exists, workloadID, err := o.runtime.Exists(ctx, containerName)
@@ -337,7 +337,7 @@ func (o *Orchestrator) startResource(ctx context.Context, topo *config.Topology,
 		}
 		if status.State != WorkloadStateRunning {
 			// Need to start using the runtime's Start which handles existing containers
-			_, err = o.runtime.Start(ctx, WorkloadConfig{Name: res.Name, Topology: topo.Name})
+			_, err = o.runtime.Start(ctx, WorkloadConfig{Name: res.Name, Stack: stack.Name})
 			return err
 		}
 		return nil
@@ -351,8 +351,8 @@ func (o *Orchestrator) startResource(ctx context.Context, topo *config.Topology,
 	}
 
 	// Determine network name
-	networkName := topo.Network.Name
-	if len(topo.Networks) > 0 && res.Network != "" {
+	networkName := stack.Network.Name
+	if len(stack.Networks) > 0 && res.Network != "" {
 		networkName = res.Network
 	}
 
@@ -360,22 +360,22 @@ func (o *Orchestrator) startResource(ctx context.Context, topo *config.Topology,
 	// Note: Name is the logical name, the runtime generates the container name
 	cfg := WorkloadConfig{
 		Name:        res.Name,
-		Topology:    topo.Name,
+		Stack:       stack.Name,
 		Type:        WorkloadTypeResource,
 		Image:       res.Image,
 		Env:         res.Env,
 		NetworkName: networkName,
 		ExposedPort: 0, // Resources don't expose MCP ports
 		Volumes:     res.Volumes,
-		Labels:      managedLabels(topo.Name, res.Name, false),
+		Labels:      managedLabels(stack.Name, res.Name, false),
 	}
 
 	_, err = o.runtime.Start(ctx, cfg)
 	return err
 }
 
-func (o *Orchestrator) startAgent(ctx context.Context, topo *config.Topology, agent *config.Agent, opts UpOptions) (*AgentResult, error) {
-	containerName := containerName(topo.Name, agent.Name)
+func (o *Orchestrator) startAgent(ctx context.Context, stack *config.Stack, agent *config.Agent, opts UpOptions) (*AgentResult, error) {
+	containerName := containerName(stack.Name, agent.Name)
 
 	// Check if container already exists
 	exists, workloadID, err := o.runtime.Exists(ctx, containerName)
@@ -404,7 +404,7 @@ func (o *Orchestrator) startAgent(ctx context.Context, topo *config.Topology, ag
 			Ref:        agent.Source.Ref,
 			Path:       agent.Source.Path,
 			Dockerfile: agent.Source.Dockerfile,
-			Tag:        generateTag(topo.Name, agent.Name),
+			Tag:        generateTag(stack.Name, agent.Name),
 			BuildArgs:  agent.BuildArgs,
 			NoCache:    opts.NoCache,
 		}
@@ -425,8 +425,8 @@ func (o *Orchestrator) startAgent(ctx context.Context, topo *config.Topology, ag
 	}
 
 	// Determine network name
-	networkName := topo.Network.Name
-	if len(topo.Networks) > 0 && agent.Network != "" {
+	networkName := stack.Network.Name
+	if len(stack.Networks) > 0 && agent.Network != "" {
 		networkName = agent.Network
 	}
 
@@ -444,14 +444,14 @@ func (o *Orchestrator) startAgent(ctx context.Context, topo *config.Topology, ag
 	// Note: Name is the logical name, the runtime generates the container name
 	cfg := WorkloadConfig{
 		Name:        agent.Name,
-		Topology:    topo.Name,
+		Stack:       stack.Name,
 		Type:        WorkloadTypeAgent,
 		Image:       imageName,
 		Command:     agent.Command,
 		Env:         env,
 		NetworkName: networkName,
 		ExposedPort: 0, // Agents don't expose ports
-		Labels:      agentLabels(topo.Name, agent.Name),
+		Labels:      agentLabels(stack.Name, agent.Name),
 	}
 
 	status, err := o.runtime.Start(ctx, cfg)
@@ -468,8 +468,8 @@ func (o *Orchestrator) startAgent(ctx context.Context, topo *config.Topology, ag
 	}, nil
 }
 
-// Down stops and removes all managed workloads and networks for a topology.
-func (o *Orchestrator) Down(ctx context.Context, topology string) error {
+// Down stops and removes all managed workloads and networks for a stack.
+func (o *Orchestrator) Down(ctx context.Context, stack string) error {
 	// Check runtime
 	if err := o.runtime.Ping(ctx); err != nil {
 		return err
@@ -477,7 +477,7 @@ func (o *Orchestrator) Down(ctx context.Context, topology string) error {
 
 	o.logger.Info("stopping managed workloads")
 
-	workloads, err := o.runtime.List(ctx, WorkloadFilter{Topology: topology})
+	workloads, err := o.runtime.List(ctx, WorkloadFilter{Stack: stack})
 	if err != nil {
 		return err
 	}
@@ -500,7 +500,7 @@ func (o *Orchestrator) Down(ctx context.Context, topology string) error {
 	}
 
 	// Clean up networks
-	networks, err := o.runtime.ListNetworks(ctx, topology)
+	networks, err := o.runtime.ListNetworks(ctx, stack)
 	if err != nil {
 		o.logger.Warn("failed to list networks", "error", err)
 	} else if len(networks) > 0 {
@@ -517,25 +517,25 @@ func (o *Orchestrator) Down(ctx context.Context, topology string) error {
 }
 
 // Status returns information about managed workloads.
-func (o *Orchestrator) Status(ctx context.Context, topology string) ([]WorkloadStatus, error) {
+func (o *Orchestrator) Status(ctx context.Context, stack string) ([]WorkloadStatus, error) {
 	// Check runtime
 	if err := o.runtime.Ping(ctx); err != nil {
 		return nil, err
 	}
 
-	return o.runtime.List(ctx, WorkloadFilter{Topology: topology})
+	return o.runtime.List(ctx, WorkloadFilter{Stack: stack})
 }
 
 // sortAgentsByDependency returns agents sorted in dependency order.
 // Agents with no agent dependencies come first, dependent agents come later.
-func sortAgentsByDependency(topo *config.Topology) ([]config.Agent, error) {
-	if len(topo.Agents) == 0 {
+func sortAgentsByDependency(stack *config.Stack) ([]config.Agent, error) {
+	if len(stack.Agents) == 0 {
 		return nil, nil
 	}
 
 	// Build set of A2A-enabled agent names (these are the only valid agent dependencies)
 	a2aAgents := make(map[string]bool)
-	for _, agent := range topo.Agents {
+	for _, agent := range stack.Agents {
 		if agent.IsA2AEnabled() {
 			a2aAgents[agent.Name] = true
 		}
@@ -545,7 +545,7 @@ func sortAgentsByDependency(topo *config.Topology) ([]config.Agent, error) {
 	graph := NewDependencyGraph()
 	agentsByName := make(map[string]config.Agent)
 
-	for _, agent := range topo.Agents {
+	for _, agent := range stack.Agents {
 		graph.AddNode(agent.Name)
 		agentsByName[agent.Name] = agent
 
@@ -574,18 +574,18 @@ func sortAgentsByDependency(topo *config.Topology) ([]config.Agent, error) {
 
 // Helper functions that don't need Docker-specific code
 
-func containerName(topology, name string) string {
-	return "gridctl-" + topology + "-" + name
+func containerName(stack, name string) string {
+	return "gridctl-" + stack + "-" + name
 }
 
-func generateTag(topology, name string) string {
-	return fmt.Sprintf("gridctl-%s-%s:latest", topology, name)
+func generateTag(stack, name string) string {
+	return fmt.Sprintf("gridctl-%s-%s:latest", stack, name)
 }
 
-func managedLabels(topology, name string, isMCPServer bool) map[string]string {
+func managedLabels(stack, name string, isMCPServer bool) map[string]string {
 	labels := map[string]string{
-		"gridctl.managed":  "true",
-		"gridctl.topology": topology,
+		"gridctl.managed": "true",
+		"gridctl.stack":   stack,
 	}
 	if isMCPServer {
 		labels["gridctl.mcp-server"] = name
@@ -595,10 +595,10 @@ func managedLabels(topology, name string, isMCPServer bool) map[string]string {
 	return labels
 }
 
-func agentLabels(topology, name string) map[string]string {
+func agentLabels(stack, name string) map[string]string {
 	return map[string]string{
-		"gridctl.managed":  "true",
-		"gridctl.topology": topology,
-		"gridctl.agent":    name,
+		"gridctl.managed": "true",
+		"gridctl.stack":   stack,
+		"gridctl.agent":   name,
 	}
 }

@@ -54,7 +54,7 @@ func (m *MockWorkloadRuntime) Start(ctx context.Context, cfg runtime.WorkloadCon
 	return &runtime.WorkloadStatus{
 		ID:       id,
 		Name:     cfg.Name,
-		Topology: cfg.Topology,
+		Stack: cfg.Stack,
 		Type:     cfg.Type,
 		State:    runtime.WorkloadStateRunning,
 		HostPort: cfg.HostPort,
@@ -121,7 +121,7 @@ func (m *MockWorkloadRuntime) EnsureNetwork(ctx context.Context, name string, op
 	return nil
 }
 
-func (m *MockWorkloadRuntime) ListNetworks(ctx context.Context, topology string) ([]string, error) {
+func (m *MockWorkloadRuntime) ListNetworks(ctx context.Context, stack string) ([]string, error) {
 	if m.ListNetworksErr != nil {
 		return nil, m.ListNetworksErr
 	}
@@ -185,7 +185,7 @@ func TestOrchestrator_Up_ExternalServer(t *testing.T) {
 
 	orch := runtime.NewOrchestrator(mockRT, mockBuilder)
 
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "test-external",
 		Network: config.Network{
@@ -269,7 +269,7 @@ func TestOrchestrator_Up_LocalProcessServer(t *testing.T) {
 
 	orch := runtime.NewOrchestrator(mockRT, mockBuilder)
 
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "test-local",
 		Network: config.Network{
@@ -336,7 +336,7 @@ func TestOrchestrator_Up_SSHServer(t *testing.T) {
 
 	orch := runtime.NewOrchestrator(mockRT, mockBuilder)
 
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "test-ssh",
 		Network: config.Network{
@@ -399,9 +399,9 @@ func TestOrchestrator_Up_AgentDependencyOrder(t *testing.T) {
 
 	orch := runtime.NewOrchestrator(mockRT, mockBuilder)
 
-	// Create topology with agents that have dependencies
+	// Create stack with agents that have dependencies
 	// agent-c depends on agent-b, agent-b depends on agent-a
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "test-deps",
 		Network: config.Network{
@@ -455,14 +455,14 @@ func TestOrchestrator_Up_AgentDependencyOrder(t *testing.T) {
 	}
 }
 
-// TestOrchestrator_Up_MixedServerTypes tests a topology with all server types.
+// TestOrchestrator_Up_MixedServerTypes tests a stack with all server types.
 func TestOrchestrator_Up_MixedServerTypes(t *testing.T) {
 	mockRT := NewMockWorkloadRuntime()
 	mockBuilder := &MockBuilder{}
 
 	orch := runtime.NewOrchestrator(mockRT, mockBuilder)
 
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "test-mixed",
 		Network: config.Network{
@@ -558,7 +558,7 @@ func TestOrchestrator_Up_BasePortConfiguration(t *testing.T) {
 
 	orch := runtime.NewOrchestrator(mockRT, mockBuilder)
 
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "test-ports",
 		Network: config.Network{
@@ -596,7 +596,7 @@ func TestOrchestrator_Up_DefaultBasePort(t *testing.T) {
 
 	orch := runtime.NewOrchestrator(mockRT, mockBuilder)
 
-	topo := &config.Topology{
+	topo := &config.Stack{
 		Version: "1",
 		Name:    "test-default-port",
 		Network: config.Network{

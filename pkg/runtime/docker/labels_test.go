@@ -5,30 +5,30 @@ import "testing"
 func TestManagedLabels(t *testing.T) {
 	tests := []struct {
 		name        string
-		topology    string
+		stack       string
 		serverName  string
 		isMCPServer bool
 		wantLabels  map[string]string
 	}{
 		{
 			name:        "MCP server labels",
-			topology:    "test-topo",
+			stack:       "test-topo",
 			serverName:  "my-server",
 			isMCPServer: true,
 			wantLabels: map[string]string{
 				LabelManaged:   "true",
-				LabelTopology:  "test-topo",
+				LabelStack:  "test-topo",
 				LabelMCPServer: "my-server",
 			},
 		},
 		{
 			name:        "resource labels",
-			topology:    "prod",
+			stack:       "prod",
 			serverName:  "postgres",
 			isMCPServer: false,
 			wantLabels: map[string]string{
 				LabelManaged:  "true",
-				LabelTopology: "prod",
+				LabelStack: "prod",
 				LabelResource: "postgres",
 			},
 		},
@@ -36,7 +36,7 @@ func TestManagedLabels(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			labels := ManagedLabels(tc.topology, tc.serverName, tc.isMCPServer)
+			labels := ManagedLabels(tc.stack, tc.serverName, tc.isMCPServer)
 
 			if len(labels) != len(tc.wantLabels) {
 				t.Errorf("got %d labels, want %d", len(labels), len(tc.wantLabels))
@@ -64,9 +64,9 @@ func TestManagedLabels(t *testing.T) {
 
 func TestContainerName(t *testing.T) {
 	tests := []struct {
-		topology string
-		name     string
-		want     string
+		stack string
+		name  string
+		want  string
 	}{
 		{"my-topo", "server1", "gridctl-my-topo-server1"},
 		{"prod", "postgres", "gridctl-prod-postgres"},
@@ -74,10 +74,10 @@ func TestContainerName(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.topology+"_"+tc.name, func(t *testing.T) {
-			got := ContainerName(tc.topology, tc.name)
+		t.Run(tc.stack+"_"+tc.name, func(t *testing.T) {
+			got := ContainerName(tc.stack, tc.name)
 			if got != tc.want {
-				t.Errorf("ContainerName(%q, %q) = %q, want %q", tc.topology, tc.name, got, tc.want)
+				t.Errorf("ContainerName(%q, %q) = %q, want %q", tc.stack, tc.name, got, tc.want)
 			}
 		})
 	}

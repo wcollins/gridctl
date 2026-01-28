@@ -60,7 +60,7 @@ func (a *A2AClientAdapter) Initialize(ctx context.Context) error {
 
 // InitializeFromSkills initializes the adapter directly from skill data.
 // This is used for local A2A agents where we already have the skill info
-// from the topology config and don't need to make an HTTP call.
+// from the stack config and don't need to make an HTTP call.
 func (a *A2AClientAdapter) InitializeFromSkills(version string, skills []a2a.Skill) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
