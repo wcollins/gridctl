@@ -29,28 +29,28 @@ func (e ValidationErrors) Error() string {
 	return "validation errors:\n  - " + strings.Join(msgs, "\n  - ")
 }
 
-// Validate checks the topology configuration for errors.
-func Validate(t *Topology) error {
+// Validate checks the stack configuration for errors.
+func Validate(s *Stack) error {
 	var errs ValidationErrors
 
-	// Topology-level validation
-	if t.Name == "" {
-		errs = append(errs, ValidationError{"topology.name", "is required"})
+	// Stack-level validation
+	if s.Name == "" {
+		errs = append(errs, ValidationError{"stack.name", "is required"})
 	}
 
 	// Network mode validation
-	hasNetwork := t.Network.Name != ""
-	hasNetworks := len(t.Networks) > 0
+	hasNetwork := s.Network.Name != ""
+	hasNetworks := len(s.Networks) > 0
 
 	if hasNetwork && hasNetworks {
-		errs = append(errs, ValidationError{"topology", "cannot have both 'network' and 'networks' - use one or the other"})
+		errs = append(errs, ValidationError{"stack", "cannot have both 'network' and 'networks' - use one or the other"})
 	}
 
 	// Build network name set for advanced mode validation
 	networkNames := make(map[string]bool)
 	if hasNetworks {
 		// Validate each network in the networks list
-		for i, net := range t.Networks {
+		for i, net := range s.Networks {
 			prefix := fmt.Sprintf("networks[%d]", i)
 			if net.Name == "" {
 				errs = append(errs, ValidationError{prefix + ".name", "is required"})
@@ -65,17 +65,17 @@ func Validate(t *Topology) error {
 		}
 	} else {
 		// Simple mode: validate single network
-		if t.Network.Name == "" {
-			errs = append(errs, ValidationError{"topology.network.name", "is required"})
+		if s.Network.Name == "" {
+			errs = append(errs, ValidationError{"stack.network.name", "is required"})
 		}
-		if t.Network.Driver != "" && t.Network.Driver != "bridge" && t.Network.Driver != "host" && t.Network.Driver != "none" {
-			errs = append(errs, ValidationError{"topology.network.driver", "must be 'bridge', 'host', or 'none'"})
+		if s.Network.Driver != "" && s.Network.Driver != "bridge" && s.Network.Driver != "host" && s.Network.Driver != "none" {
+			errs = append(errs, ValidationError{"stack.network.driver", "must be 'bridge', 'host', or 'none'"})
 		}
 	}
 
 	// MCP server validation
 	serverNames := make(map[string]bool)
-	for i, server := range t.MCPServers {
+	for i, server := range s.MCPServers {
 		prefix := fmt.Sprintf("mcp-servers[%d]", i)
 
 		if server.Name == "" {
@@ -209,7 +209,7 @@ func Validate(t *Topology) error {
 
 	// Resource validation
 	resourceNames := make(map[string]bool)
-	for i, resource := range t.Resources {
+	for i, resource := range s.Resources {
 		prefix := fmt.Sprintf("resources[%d]", i)
 
 		if resource.Name == "" {
@@ -240,7 +240,7 @@ func Validate(t *Topology) error {
 	// Agent validation - first pass: collect names and A2A status
 	agentNames := make(map[string]bool)
 	a2aEnabledAgents := make(map[string]bool)
-	for i, agent := range t.Agents {
+	for i, agent := range s.Agents {
 		prefix := fmt.Sprintf("agents[%d]", i)
 
 		if agent.Name == "" {
@@ -260,7 +260,7 @@ func Validate(t *Topology) error {
 	}
 
 	// Agent validation - second pass: validate structure and dependencies
-	for i, agent := range t.Agents {
+	for i, agent := range s.Agents {
 		prefix := fmt.Sprintf("agents[%d]", i)
 
 		// Determine agent mode: container-based or headless
@@ -355,7 +355,7 @@ func Validate(t *Topology) error {
 
 	// A2A agent validation
 	a2aAgentNames := make(map[string]bool)
-	for i, a2aAgent := range t.A2AAgents {
+	for i, a2aAgent := range s.A2AAgents {
 		prefix := fmt.Sprintf("a2a-agents[%d]", i)
 
 		if a2aAgent.Name == "" {
@@ -387,7 +387,7 @@ func Validate(t *Topology) error {
 	}
 
 	// Check for circular dependencies between agents
-	if cycleErr := detectAgentCycles(t, a2aEnabledAgents); cycleErr != nil {
+	if cycleErr := detectAgentCycles(s, a2aEnabledAgents); cycleErr != nil {
 		errs = append(errs, ValidationError{"agents", cycleErr.Error()})
 	}
 
@@ -398,10 +398,10 @@ func Validate(t *Topology) error {
 }
 
 // detectAgentCycles checks for circular dependencies in agent-to-agent relationships.
-func detectAgentCycles(t *Topology, a2aEnabledAgents map[string]bool) error {
+func detectAgentCycles(s *Stack, a2aEnabledAgents map[string]bool) error {
 	// Build adjacency list for agent dependencies (only agent-to-agent, not agent-to-server)
 	deps := make(map[string][]string)
-	for _, agent := range t.Agents {
+	for _, agent := range s.Agents {
 		var agentDeps []string
 		for _, selector := range agent.Uses {
 			if a2aEnabledAgents[selector.Server] {
