@@ -11,8 +11,8 @@ import (
 )
 
 // EnsureNetwork creates the network if it doesn't exist.
-// The topology parameter is used for labeling (for cleanup).
-func EnsureNetwork(ctx context.Context, cli dockerclient.DockerClient, name, driver, topology string) (string, error) {
+// The stack parameter is used for labeling (for cleanup).
+func EnsureNetwork(ctx context.Context, cli dockerclient.DockerClient, name, driver, stack string) (string, error) {
 	// Check if network exists
 	networks, err := cli.NetworkList(ctx, network.ListOptions{
 		Filters: filters.NewArgs(filters.Arg("name", name)),
@@ -27,12 +27,12 @@ func EnsureNetwork(ctx context.Context, cli dockerclient.DockerClient, name, dri
 		}
 	}
 
-	// Create network with topology label for cleanup
+	// Create network with stack label for cleanup
 	labels := map[string]string{
 		LabelManaged: "true",
 	}
-	if topology != "" {
-		labels[LabelTopology] = topology
+	if stack != "" {
+		labels[LabelStack] = stack
 	}
 
 	resp, err := cli.NetworkCreate(ctx, name, network.CreateOptions{
@@ -46,13 +46,13 @@ func EnsureNetwork(ctx context.Context, cli dockerclient.DockerClient, name, dri
 	return resp.ID, nil
 }
 
-// ListManagedNetworks returns all networks managed by gridctl for a topology.
-func ListManagedNetworks(ctx context.Context, cli dockerclient.DockerClient, topology string) ([]string, error) {
+// ListManagedNetworks returns all networks managed by gridctl for a stack.
+func ListManagedNetworks(ctx context.Context, cli dockerclient.DockerClient, stack string) ([]string, error) {
 	filterArgs := filters.NewArgs(
 		filters.Arg("label", LabelManaged+"=true"),
 	)
-	if topology != "" {
-		filterArgs.Add("label", LabelTopology+"="+topology)
+	if stack != "" {
+		filterArgs.Add("label", LabelStack+"="+stack)
 	}
 
 	networks, err := cli.NetworkList(ctx, network.ListOptions{
