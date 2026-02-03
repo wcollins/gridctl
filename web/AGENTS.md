@@ -294,7 +294,73 @@ openDetachedWindow('logs', `agent=${encodeURIComponent(agentName)}`);
 openDetachedWindow('sidebar', `node=${encodeURIComponent(nodeName)}`);
 ```
 
-## 12. Checklist for New Components
+## 12. Structured Log Viewer
+
+The BottomPanel and DetachedLogsPage components provide a structured log viewer with filtering capabilities.
+
+### Log Entry Format
+
+Logs are fetched from two sources:
+- **Gateway logs**: `GET /api/logs` returns structured JSON entries
+- **Container logs**: `GET /api/agents/{name}/logs` returns string arrays (parsed as JSON when possible)
+
+```typescript
+interface LogEntry {
+  level: string;     // "DEBUG", "INFO", "WARN", "ERROR"
+  ts: string;        // RFC3339Nano timestamp
+  msg: string;       // Log message
+  component?: string; // Component name (e.g., "gateway", "router")
+  trace_id?: string;  // Trace ID for correlation
+  attrs?: Record<string, unknown>; // Additional attributes
+}
+```
+
+### Log Level Styling
+
+| Level | Text Color | Badge Background | Border | Dot |
+|-------|------------|------------------|--------|-----|
+| ERROR | `text-status-error` | `bg-status-error/10` | `border-status-error/30` | `bg-status-error` |
+| WARN | `text-status-pending` | `bg-status-pending/10` | `border-status-pending/30` | `bg-status-pending` |
+| INFO | `text-primary` | `bg-primary/10` | `border-primary/30` | `bg-primary` |
+| DEBUG | `text-text-muted` | `bg-surface-highlight` | `border-border/30` | `bg-text-muted` |
+
+### Log Line Layout
+
+Each log line uses a CSS grid layout with fixed column widths:
+
+```tsx
+// LogLine grid structure
+<div className="grid gap-2 px-3 py-1 grid-cols-[90px_50px_80px_1fr_20px]">
+  <span>Timestamp</span>   {/* 90px - HH:MM:SS.mmm format */}
+  <span>Level Badge</span> {/* 50px - Colored badge with dot */}
+  <span>Component</span>   {/* 80px - Truncated component name */}
+  <span>Message</span>     {/* 1fr - Flexible message area */}
+  <span>Expand Icon</span> {/* 20px - ChevronRight when expandable */}
+</div>
+```
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Level Filter** | Dropdown with checkboxes to toggle ERROR, WARN, INFO, DEBUG visibility |
+| **Search** | Text input filters by message, component, or trace_id |
+| **Expandable Entries** | Click log lines with attrs/trace_id to show full JSON details |
+| **Auto-scroll** | Automatically scrolls to bottom; pauses when user scrolls up |
+| **Gateway Badge** | "Structured" badge shown when viewing gateway logs |
+
+### Components
+
+- **LevelFilter**: Dropdown component with level toggle checkboxes
+- **LogLine**: Individual log entry with expand/collapse functionality
+- **parseLogEntry()**: Parses string or LogEntry into normalized ParsedLog format
+- **formatTimestamp()**: Formats RFC3339 timestamps to HH:MM:SS.mmm
+
+### Shared Implementation
+
+Both `BottomPanel.tsx` and `DetachedLogsPage.tsx` share identical structured logging components (LevelFilter, LogLine, parseLogEntry, formatTimestamp) to ensure consistent behavior in attached and detached modes.
+
+## 13. Checklist for New Components
 
 1. Use Tailwind color tokens (no hardcoded hex values)
 2. Use `font-mono` for technical data, `font-sans` for UI

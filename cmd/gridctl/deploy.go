@@ -18,6 +18,7 @@ import (
 	"github.com/gridctl/gridctl/pkg/a2a"
 	"github.com/gridctl/gridctl/pkg/adapter"
 	"github.com/gridctl/gridctl/pkg/config"
+	"github.com/gridctl/gridctl/pkg/logging"
 	"github.com/gridctl/gridctl/pkg/mcp"
 	"github.com/gridctl/gridctl/pkg/output"
 	"github.com/gridctl/gridctl/pkg/runtime"
@@ -408,14 +409,23 @@ func runGateway(ctx context.Context, rt *runtime.Runtime, stack *config.Stack, s
 	gateway.SetDockerClient(rt.DockerClient())
 	gateway.SetVersion(version)
 
-	// Configure logging for verbose mode
-	if verbose {
-		logLevel := slog.LevelInfo
-		if deployVerbose {
-			logLevel = slog.LevelDebug
-		}
-		gateway.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
+	// Create log buffer for structured logs (UI consumption)
+	logBuffer := logging.NewLogBuffer(1000)
+
+	// Configure structured logging
+	// Always use JSON format for the buffer, optionally add text output for verbose mode
+	logLevel := slog.LevelInfo
+	if deployVerbose {
+		logLevel = slog.LevelDebug
 	}
+
+	var innerHandler slog.Handler
+	if verbose {
+		// In verbose/foreground mode, also output to stderr
+		innerHandler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})
+	}
+	bufferHandler := logging.NewBufferHandler(logBuffer, innerHandler)
+	gateway.SetLogger(slog.New(bufferHandler))
 
 	// Create A2A gateway early if needed (for server setup)
 	var a2aGateway *a2a.Gateway
@@ -444,6 +454,7 @@ func runGateway(ctx context.Context, rt *runtime.Runtime, stack *config.Stack, s
 	server := api.NewServer(gateway, webFS)
 	server.SetDockerClient(rt.DockerClient())
 	server.SetStackName(stack.Name)
+	server.SetLogBuffer(logBuffer)
 	if a2aGateway != nil {
 		server.SetA2AGateway(a2aGateway)
 	}
