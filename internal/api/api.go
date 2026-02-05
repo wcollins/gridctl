@@ -14,6 +14,7 @@ import (
 	"github.com/gridctl/gridctl/pkg/dockerclient"
 	"github.com/gridctl/gridctl/pkg/logging"
 	"github.com/gridctl/gridctl/pkg/mcp"
+	"github.com/gridctl/gridctl/pkg/reload"
 	"github.com/gridctl/gridctl/pkg/runtime/docker"
 
 	"github.com/docker/docker/api/types/container"
@@ -21,14 +22,15 @@ import (
 
 // Server provides the combined API server for gridctl.
 type Server struct {
-	gateway      *mcp.Gateway
-	mcpHandler   *mcp.Handler
-	sseServer    *mcp.SSEServer
-	a2aGateway   *a2a.Gateway
-	staticFS     fs.FS
-	dockerClient dockerclient.DockerClient
-	stackName    string
-	logBuffer    *logging.LogBuffer
+	gateway       *mcp.Gateway
+	mcpHandler    *mcp.Handler
+	sseServer     *mcp.SSEServer
+	a2aGateway    *a2a.Gateway
+	staticFS      fs.FS
+	dockerClient  dockerclient.DockerClient
+	stackName     string
+	logBuffer     *logging.LogBuffer
+	reloadHandler *reload.Handler
 }
 
 // NewServer creates a new API server.
@@ -71,6 +73,16 @@ func (s *Server) LogBuffer() *logging.LogBuffer {
 	return s.logBuffer
 }
 
+// SetReloadHandler sets the reload handler for hot reload support.
+func (s *Server) SetReloadHandler(h *reload.Handler) {
+	s.reloadHandler = h
+}
+
+// ReloadHandler returns the reload handler.
+func (s *Server) ReloadHandler() *reload.Handler {
+	return s.reloadHandler
+}
+
 // Handler returns the main HTTP handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -91,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/mcp-servers", s.handleMCPServers)
 	mux.HandleFunc("/api/tools", s.handleTools)
 	mux.HandleFunc("/api/logs", s.handleGatewayLogs)
+	mux.HandleFunc("/api/reload", s.handleReload)
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
 
@@ -666,6 +679,31 @@ func (s *Server) handleGatewayLogs(w http.ResponseWriter, r *http.Request) {
 		entries = []logging.BufferedEntry{}
 	}
 	writeJSON(w, entries)
+}
+
+// handleReload triggers a configuration reload from disk.
+// POST /api/reload
+func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.reloadHandler == nil {
+		writeJSONError(w, "Reload not enabled (start with --watch flag)", http.StatusServiceUnavailable)
+		return
+	}
+
+	result, err := s.reloadHandler.Reload(r.Context())
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if !result.Success {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	writeJSON(w, result)
 }
 
 // handleHealth returns 200 OK when the daemon is alive and serving requests.
