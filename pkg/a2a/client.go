@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 // Client communicates with a remote A2A agent.
@@ -34,7 +33,7 @@ func NewClient(name, endpoint string) *Client {
 		name:     name,
 		endpoint: endpoint,
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: DefaultA2ATimeout,
 		},
 		authHeader: "Authorization",
 	}
