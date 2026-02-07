@@ -45,6 +45,13 @@ func LoadStack(path string) (*Stack, error) {
 // expandEnvVars expands environment variables in the stack.
 func expandEnvVars(s *Stack) {
 	s.Name = os.ExpandEnv(s.Name)
+
+	if s.Gateway != nil {
+		for i := range s.Gateway.AllowedOrigins {
+			s.Gateway.AllowedOrigins[i] = os.ExpandEnv(s.Gateway.AllowedOrigins[i])
+		}
+	}
+
 	s.Network.Name = os.ExpandEnv(s.Network.Name)
 
 	// Expand networks (advanced mode)
