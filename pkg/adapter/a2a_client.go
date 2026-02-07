@@ -11,6 +11,11 @@ import (
 	"github.com/gridctl/gridctl/pkg/mcp"
 )
 
+const (
+	readyPollInterval     = 500 * time.Millisecond
+	taskCompletionTimeout = 5 * time.Minute
+)
+
 // A2AClientAdapter adapts an A2A agent to the mcp.AgentClient interface.
 // This enables agents to be "equipped" as skills by other agents through the
 // unified MCP gateway, treating A2A agents as tool providers.
@@ -156,7 +161,7 @@ func (a *A2AClientAdapter) ServerInfo() mcp.ServerInfo {
 
 // WaitForReady waits for the A2A agent to become available with retries.
 func (a *A2AClientAdapter) WaitForReady(ctx context.Context, timeout time.Duration) error {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(readyPollInterval)
 	defer ticker.Stop()
 
 	deadline := time.After(timeout)
@@ -177,10 +182,10 @@ func (a *A2AClientAdapter) WaitForReady(ctx context.Context, timeout time.Durati
 
 // waitForTaskCompletion polls the task until it reaches a terminal state.
 func (a *A2AClientAdapter) waitForTaskCompletion(ctx context.Context, taskID string) (*a2a.Task, error) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(readyPollInterval)
 	defer ticker.Stop()
 
-	timeout := time.After(5 * time.Minute)
+	timeout := time.After(taskCompletionTimeout)
 
 	for {
 		select {
