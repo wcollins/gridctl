@@ -39,7 +39,7 @@ func NewClient(name, endpoint string) *Client {
 		endpoint: endpoint,
 		logger:   logging.NewDiscardLogger(),
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: DefaultRequestTimeout,
 		},
 	}
 }
@@ -73,7 +73,7 @@ func (c *Client) SetToolWhitelist(tools []string) {
 // Initialize performs the MCP initialize handshake.
 func (c *Client) Initialize(ctx context.Context) error {
 	params := InitializeParams{
-		ProtocolVersion: "2024-11-05",
+		ProtocolVersion: MCPProtocolVersion,
 		ClientInfo: ClientInfo{
 			Name:    "gridctl-gateway",
 			Version: "1.0.0",

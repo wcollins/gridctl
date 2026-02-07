@@ -157,7 +157,7 @@ func (c *StdioClient) Initialize(ctx context.Context) error {
 	}
 
 	params := InitializeParams{
-		ProtocolVersion: "2024-11-05",
+		ProtocolVersion: MCPProtocolVersion,
 		ClientInfo: ClientInfo{
 			Name:    "gridctl-gateway",
 			Version: "1.0.0",
@@ -291,7 +291,7 @@ func (c *StdioClient) call(ctx context.Context, method string, params any, resul
 	}
 
 	// Wait for response with timeout to prevent hanging on dead containers
-	timeout := time.NewTimer(30 * time.Second)
+	timeout := time.NewTimer(DefaultRequestTimeout)
 	defer timeout.Stop()
 
 	select {

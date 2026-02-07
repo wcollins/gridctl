@@ -17,6 +17,8 @@ import (
 	"github.com/gridctl/gridctl/pkg/logging"
 )
 
+const processKillGracePeriod = 5 * time.Second
+
 // ProcessClient communicates with an MCP server via a local process stdin/stdout.
 type ProcessClient struct {
 	name      string
@@ -189,7 +191,7 @@ func (c *ProcessClient) Initialize(ctx context.Context) error {
 	}
 
 	params := InitializeParams{
-		ProtocolVersion: "2024-11-05",
+		ProtocolVersion: MCPProtocolVersion,
 		ClientInfo: ClientInfo{
 			Name:    "gridctl-gateway",
 			Version: "1.0.0",
@@ -323,7 +325,7 @@ func (c *ProcessClient) call(ctx context.Context, method string, params any, res
 	}
 
 	// Wait for response with timeout to prevent hanging on dead processes
-	timeout := time.NewTimer(30 * time.Second)
+	timeout := time.NewTimer(DefaultRequestTimeout)
 	defer timeout.Stop()
 
 	select {
@@ -426,7 +428,7 @@ func (c *ProcessClient) Close() error {
 	case <-done:
 		// Process exited gracefully
 		return nil
-	case <-time.After(5 * time.Second):
+	case <-time.After(processKillGracePeriod):
 		// Force kill - ignore error since process may have already exited
 		_ = c.cmd.Process.Kill()
 		<-done
