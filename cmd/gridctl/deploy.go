@@ -481,6 +481,11 @@ func runGateway(ctx context.Context, rt *runtime.Runtime, stack *config.Stack, s
 	server.SetDockerClient(rt.DockerClient())
 	server.SetStackName(stack.Name)
 	server.SetLogBuffer(logBuffer)
+	if stack.Gateway != nil && len(stack.Gateway.AllowedOrigins) > 0 {
+		server.SetAllowedOrigins(stack.Gateway.AllowedOrigins)
+	} else {
+		server.SetAllowedOrigins([]string{"*"})
+	}
 	if a2aGateway != nil {
 		server.SetA2AGateway(a2aGateway)
 	}
