@@ -41,8 +41,6 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -103,14 +101,6 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // HandleMessage handles POST requests to /message for a specific session.
 func (s *SSEServer) HandleMessage(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodOptions {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -131,7 +121,8 @@ func (s *SSEServer) HandleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse request
+	// Parse request with size limit
+	r.Body = http.MaxBytesReader(w, r.Body, MaxRequestBodySize)
 	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -146,7 +137,6 @@ func (s *SSEServer) HandleMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Also return response directly for HTTP clients
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
