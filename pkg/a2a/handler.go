@@ -13,6 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// maxRequestBodySize is the maximum allowed size for incoming request bodies (1MB).
+// Matches mcp.MaxRequestBodySize; duplicated to avoid cross-package dependency.
+const maxRequestBodySize = 1 * 1024 * 1024
+
 // TaskHandler is a function that processes A2A messages for a local agent.
 type TaskHandler func(ctx context.Context, task *Task, msg *Message) (*Task, error)
 
@@ -80,16 +84,6 @@ func (h *Handler) ListLocalAgents() []AgentCard {
 
 // ServeHTTP routes A2A HTTP requests.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Set CORS headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	path := r.URL.Path
 
 	// Route based on path:
@@ -181,6 +175,7 @@ func (h *Handler) handleAgentRPC(w http.ResponseWriter, r *http.Request, agentNa
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		h.writeError(w, nil, ParseError, "Failed to read request body")
