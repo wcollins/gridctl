@@ -169,6 +169,7 @@ make run             # Build and run
 make test            # Run unit tests
 make test-coverage   # Run tests with coverage report
 make test-integration # Run integration tests (requires Docker)
+make generate        # Regenerate mock files (requires mockgen)
 make mock-servers    # Build and run mock MCP servers for examples
 make clean-mock-servers # Stop and remove mock MCP servers
 ```
@@ -521,9 +522,12 @@ Tests follow `*_test.go` convention adjacent to source files. Integration tests 
 
 ### Mocks
 
-- `MockWorkloadRuntime`: pkg/runtime/runtime_test.go (for testing Orchestrator)
-- `MockDockerClient`: pkg/runtime/docker/mock_test.go (for testing DockerRuntime)
-- `MockAgentClient`: pkg/mcp/mock_test.go
+Generated mocks (via `go.uber.org/mock/mockgen`, regenerate with `make generate`):
+- `MockAgentClient`: pkg/mcp/mock_agent_client_test.go (generated from `AgentClient` interface)
+- `MockWorkloadRuntime`: pkg/runtime/mock_runtime_test.go (generated from `WorkloadRuntime` interface)
+
+Hand-rolled mocks (state-based fakes):
+- `MockDockerClient`: pkg/runtime/docker/mock_test.go (fake with state, error injection, call tracking)
 - HTTP handlers: use `net/http/httptest`
 
 ### Running Tests
