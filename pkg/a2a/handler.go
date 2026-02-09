@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gridctl/gridctl/pkg/jsonrpc"
+
 	"github.com/google/uuid"
 )
 
@@ -171,20 +173,20 @@ func (h *Handler) handleAgentCard(w http.ResponseWriter, r *http.Request, agentN
 func (h *Handler) handleAgentRPC(w http.ResponseWriter, r *http.Request, agentName string) {
 	agent := h.GetLocalAgent(agentName)
 	if agent == nil {
-		h.writeError(w, nil, MethodNotFound, "Agent not found: "+agentName)
+		h.writeError(w, nil, jsonrpc.MethodNotFound, "Agent not found: "+agentName)
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		h.writeError(w, nil, ParseError, "Failed to read request body")
+		h.writeError(w, nil, jsonrpc.ParseError, "Failed to read request body")
 		return
 	}
 
-	var req Request
+	var req jsonrpc.Request
 	if err := json.Unmarshal(body, &req); err != nil {
-		h.writeError(w, nil, ParseError, "Invalid JSON")
+		h.writeError(w, nil, jsonrpc.ParseError, "Invalid JSON")
 		return
 	}
 
@@ -193,7 +195,7 @@ func (h *Handler) handleAgentRPC(w http.ResponseWriter, r *http.Request, agentNa
 }
 
 // handleMethod routes the JSON-RPC method to the appropriate handler.
-func (h *Handler) handleMethod(ctx context.Context, agent *LocalAgent, req *Request) Response {
+func (h *Handler) handleMethod(ctx context.Context, agent *LocalAgent, req *jsonrpc.Request) jsonrpc.Response {
 	switch req.Method {
 	case MethodSendMessage:
 		return h.handleSendMessage(ctx, agent, req)
@@ -204,15 +206,15 @@ func (h *Handler) handleMethod(ctx context.Context, agent *LocalAgent, req *Requ
 	case MethodCancelTask:
 		return h.handleCancelTask(ctx, req)
 	default:
-		return NewErrorResponse(req.ID, MethodNotFound, "Unknown method: "+req.Method)
+		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.MethodNotFound, "Unknown method: "+req.Method)
 	}
 }
 
 // handleSendMessage handles the message/send method.
-func (h *Handler) handleSendMessage(ctx context.Context, agent *LocalAgent, req *Request) Response {
+func (h *Handler) handleSendMessage(ctx context.Context, agent *LocalAgent, req *jsonrpc.Request) jsonrpc.Response {
 	var params SendMessageParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return NewErrorResponse(req.ID, InvalidParams, "Invalid SendMessage params")
+		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.InvalidParams, "Invalid SendMessage params")
 	}
 
 	// Generate message ID if not set
@@ -245,19 +247,19 @@ func (h *Handler) handleSendMessage(ctx context.Context, agent *LocalAgent, req 
 	h.updateTask(task)
 
 	result := SendMessageResult{Task: task}
-	return NewSuccessResponse(req.ID, result)
+	return jsonrpc.NewSuccessResponse(req.ID, result)
 }
 
 // handleGetTask handles the tasks/get method.
-func (h *Handler) handleGetTask(ctx context.Context, req *Request) Response {
+func (h *Handler) handleGetTask(ctx context.Context, req *jsonrpc.Request) jsonrpc.Response {
 	var params GetTaskParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return NewErrorResponse(req.ID, InvalidParams, "Invalid GetTask params")
+		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.InvalidParams, "Invalid GetTask params")
 	}
 
 	task := h.getTask(params.ID)
 	if task == nil {
-		return NewErrorResponse(req.ID, ErrTaskNotFound, "Task not found: "+params.ID)
+		return jsonrpc.NewErrorResponse(req.ID, ErrTaskNotFound, "Task not found: "+params.ID)
 	}
 
 	// Optionally limit message history
@@ -265,14 +267,14 @@ func (h *Handler) handleGetTask(ctx context.Context, req *Request) Response {
 		task.Messages = task.Messages[len(task.Messages)-params.HistoryLength:]
 	}
 
-	return NewSuccessResponse(req.ID, task)
+	return jsonrpc.NewSuccessResponse(req.ID, task)
 }
 
 // handleListTasks handles the tasks/list method.
-func (h *Handler) handleListTasks(ctx context.Context, req *Request) Response {
+func (h *Handler) handleListTasks(ctx context.Context, req *jsonrpc.Request) jsonrpc.Response {
 	var params ListTasksParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return NewErrorResponse(req.ID, InvalidParams, "Invalid ListTasks params")
+		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.InvalidParams, "Invalid ListTasks params")
 	}
 
 	h.mu.RLock()
@@ -297,30 +299,30 @@ func (h *Handler) handleListTasks(ctx context.Context, req *Request) Response {
 	}
 
 	result := ListTasksResult{Tasks: tasks}
-	return NewSuccessResponse(req.ID, result)
+	return jsonrpc.NewSuccessResponse(req.ID, result)
 }
 
 // handleCancelTask handles the tasks/cancel method.
-func (h *Handler) handleCancelTask(ctx context.Context, req *Request) Response {
+func (h *Handler) handleCancelTask(ctx context.Context, req *jsonrpc.Request) jsonrpc.Response {
 	var params CancelTaskParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return NewErrorResponse(req.ID, InvalidParams, "Invalid CancelTask params")
+		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.InvalidParams, "Invalid CancelTask params")
 	}
 
 	task := h.getTask(params.ID)
 	if task == nil {
-		return NewErrorResponse(req.ID, ErrTaskNotFound, "Task not found: "+params.ID)
+		return jsonrpc.NewErrorResponse(req.ID, ErrTaskNotFound, "Task not found: "+params.ID)
 	}
 
 	if task.Status.State.IsTerminal() {
-		return NewErrorResponse(req.ID, ErrTaskNotCancellable, "Task is already in terminal state")
+		return jsonrpc.NewErrorResponse(req.ID, ErrTaskNotCancellable, "Task is already in terminal state")
 	}
 
 	task.Status = TaskStatus{State: TaskStateCancelled}
 	task.UpdatedAt = time.Now()
 	h.updateTask(task)
 
-	return NewSuccessResponse(req.ID, task)
+	return jsonrpc.NewSuccessResponse(req.ID, task)
 }
 
 // createTask creates a new task.
@@ -379,11 +381,11 @@ func (h *Handler) TaskCount() int {
 
 // writeError writes a JSON-RPC error response.
 func (h *Handler) writeError(w http.ResponseWriter, id *json.RawMessage, code int, message string) {
-	h.writeResponse(w, NewErrorResponse(id, code, message))
+	h.writeResponse(w, jsonrpc.NewErrorResponse(id, code, message))
 }
 
 // writeResponse writes a JSON-RPC response.
-func (h *Handler) writeResponse(w http.ResponseWriter, resp Response) {
+func (h *Handler) writeResponse(w http.ResponseWriter, resp jsonrpc.Response) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
