@@ -3,6 +3,8 @@ package a2a
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/gridctl/gridctl/pkg/jsonrpc"
 )
 
 func TestAgentCard_JSON(t *testing.T) {
@@ -132,7 +134,7 @@ func TestRequest_JSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			id := json.RawMessage(`"1"`)
-			request := Request{
+			request := jsonrpc.Request{
 				JSONRPC: "2.0",
 				ID:      &id,
 				Method:  tt.method,
@@ -144,7 +146,7 @@ func TestRequest_JSON(t *testing.T) {
 				t.Fatalf("Failed to marshal request: %v", err)
 			}
 
-			var decoded Request
+			var decoded jsonrpc.Request
 			if err := json.Unmarshal(data, &decoded); err != nil {
 				t.Fatalf("Failed to unmarshal request: %v", err)
 			}
@@ -161,7 +163,7 @@ func TestRequest_JSON(t *testing.T) {
 
 func TestResponse_Success(t *testing.T) {
 	id := json.RawMessage(`"1"`)
-	resp := NewSuccessResponse(&id, map[string]string{"key": "value"})
+	resp := jsonrpc.NewSuccessResponse(&id, map[string]string{"key": "value"})
 
 	if resp.JSONRPC != "2.0" {
 		t.Errorf("JSONRPC mismatch: got %s, want 2.0", resp.JSONRPC)
@@ -176,7 +178,7 @@ func TestResponse_Success(t *testing.T) {
 
 func TestResponse_Error(t *testing.T) {
 	id := json.RawMessage(`"1"`)
-	resp := NewErrorResponse(&id, MethodNotFound, "Unknown method")
+	resp := jsonrpc.NewErrorResponse(&id, jsonrpc.MethodNotFound, "Unknown method")
 
 	if resp.JSONRPC != "2.0" {
 		t.Errorf("JSONRPC mismatch: got %s, want 2.0", resp.JSONRPC)
@@ -184,8 +186,8 @@ func TestResponse_Error(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	if resp.Error.Code != MethodNotFound {
-		t.Errorf("Error code mismatch: got %d, want %d", resp.Error.Code, MethodNotFound)
+	if resp.Error.Code != jsonrpc.MethodNotFound {
+		t.Errorf("Error code mismatch: got %d, want %d", resp.Error.Code, jsonrpc.MethodNotFound)
 	}
 	if resp.Error.Message != "Unknown method" {
 		t.Errorf("Error message mismatch: got %s, want 'Unknown method'", resp.Error.Message)

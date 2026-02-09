@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gridctl/gridctl/pkg/config"
+	"github.com/gridctl/gridctl/pkg/jsonrpc"
 	"go.uber.org/mock/gomock"
 )
 
@@ -71,9 +72,9 @@ func postMCP(t *testing.T, handler *Handler, body string, headers ...string) *ht
 	return w
 }
 
-func decodeResponse(t *testing.T, w *httptest.ResponseRecorder) Response {
+func decodeResponse(t *testing.T, w *httptest.ResponseRecorder) jsonrpc.Response {
 	t.Helper()
-	var resp Response
+	var resp jsonrpc.Response
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -217,8 +218,8 @@ func TestHandler_ToolsCall_InvalidParams(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for invalid tools/call params")
 	}
-	if resp.Error.Code != InvalidParams {
-		t.Errorf("expected InvalidParams code %d, got %d", InvalidParams, resp.Error.Code)
+	if resp.Error.Code != jsonrpc.InvalidParams {
+		t.Errorf("expected InvalidParams code %d, got %d", jsonrpc.InvalidParams, resp.Error.Code)
 	}
 }
 
@@ -256,8 +257,8 @@ func TestHandler_UnknownMethod(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for unknown method")
 	}
-	if resp.Error.Code != MethodNotFound {
-		t.Errorf("expected MethodNotFound code %d, got %d", MethodNotFound, resp.Error.Code)
+	if resp.Error.Code != jsonrpc.MethodNotFound {
+		t.Errorf("expected MethodNotFound code %d, got %d", jsonrpc.MethodNotFound, resp.Error.Code)
 	}
 	if !strings.Contains(resp.Error.Message, "unknown/method") {
 		t.Errorf("expected error message to contain method name, got %s", resp.Error.Message)
@@ -273,8 +274,8 @@ func TestHandler_InvalidJSON(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
-	if resp.Error.Code != ParseError {
-		t.Errorf("expected ParseError code %d, got %d", ParseError, resp.Error.Code)
+	if resp.Error.Code != jsonrpc.ParseError {
+		t.Errorf("expected ParseError code %d, got %d", jsonrpc.ParseError, resp.Error.Code)
 	}
 }
 
@@ -287,8 +288,8 @@ func TestHandler_EmptyBody(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for empty body")
 	}
-	if resp.Error.Code != ParseError {
-		t.Errorf("expected ParseError code %d, got %d", ParseError, resp.Error.Code)
+	if resp.Error.Code != jsonrpc.ParseError {
+		t.Errorf("expected ParseError code %d, got %d", jsonrpc.ParseError, resp.Error.Code)
 	}
 }
 
@@ -302,8 +303,8 @@ func TestHandler_InvalidJSONRPCVersion(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for invalid JSON-RPC version")
 	}
-	if resp.Error.Code != InvalidRequest {
-		t.Errorf("expected InvalidRequest code %d, got %d", InvalidRequest, resp.Error.Code)
+	if resp.Error.Code != jsonrpc.InvalidRequest {
+		t.Errorf("expected InvalidRequest code %d, got %d", jsonrpc.InvalidRequest, resp.Error.Code)
 	}
 }
 
@@ -443,8 +444,8 @@ func TestHandler_AgentFiltering_UnknownAgent(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for unknown agent")
 	}
-	if resp.Error.Code != InvalidRequest {
-		t.Errorf("expected InvalidRequest code %d, got %d", InvalidRequest, resp.Error.Code)
+	if resp.Error.Code != jsonrpc.InvalidRequest {
+		t.Errorf("expected InvalidRequest code %d, got %d", jsonrpc.InvalidRequest, resp.Error.Code)
 	}
 	if !strings.Contains(resp.Error.Message, "nonexistent-agent") {
 		t.Errorf("expected error to contain agent name, got %s", resp.Error.Message)
@@ -464,7 +465,7 @@ func TestHandler_AgentFiltering_UnknownAgent_ToolsCall(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for unknown agent on tools/call")
 	}
-	if resp.Error.Code != InvalidRequest {
+	if resp.Error.Code != jsonrpc.InvalidRequest {
 		t.Errorf("expected InvalidRequest code, got %d", resp.Error.Code)
 	}
 }
@@ -519,8 +520,8 @@ func TestHandler_RequestSizeLimit(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for oversized request body")
 	}
-	if resp.Error.Code != ParseError {
-		t.Errorf("expected ParseError code %d, got %d", ParseError, resp.Error.Code)
+	if resp.Error.Code != jsonrpc.ParseError {
+		t.Errorf("expected ParseError code %d, got %d", jsonrpc.ParseError, resp.Error.Code)
 	}
 }
 
@@ -567,8 +568,8 @@ func TestHandler_Initialize_InvalidParams(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatal("expected error for invalid initialize params")
 	}
-	if resp.Error.Code != InvalidParams {
-		t.Errorf("expected InvalidParams code %d, got %d", InvalidParams, resp.Error.Code)
+	if resp.Error.Code != jsonrpc.InvalidParams {
+		t.Errorf("expected InvalidParams code %d, got %d", jsonrpc.InvalidParams, resp.Error.Code)
 	}
 }
 
