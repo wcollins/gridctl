@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/gridctl/gridctl/pkg/jsonrpc"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -133,7 +135,7 @@ func TestHandler_MessageSend(t *testing.T) {
 		Card: AgentCard{Name: "test-agent"},
 	})
 
-	reqBody := Request{
+	reqBody := jsonrpc.Request{
 		JSONRPC: "2.0",
 		ID:      mustMarshalRaw("1"),
 		Method:  MethodSendMessage,
@@ -158,7 +160,7 @@ func TestHandler_MessageSend(t *testing.T) {
 		t.Errorf("Status code mismatch: got %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var resp Response
+	var resp jsonrpc.Response
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
@@ -181,7 +183,7 @@ func TestHandler_TasksGet(t *testing.T) {
 	})
 
 	// First create a task via message/send
-	sendReq := Request{
+	sendReq := jsonrpc.Request{
 		JSONRPC: "2.0",
 		ID:      mustMarshalRaw("1"),
 		Method:  MethodSendMessage,
@@ -209,7 +211,7 @@ func TestHandler_TasksGet(t *testing.T) {
 	taskID := sendResp.Result.Task.ID
 
 	// Now get the task
-	getReq := Request{
+	getReq := jsonrpc.Request{
 		JSONRPC: "2.0",
 		ID:      mustMarshalRaw("2"),
 		Method:  MethodGetTask,
@@ -226,7 +228,7 @@ func TestHandler_TasksGet(t *testing.T) {
 		t.Errorf("Status code mismatch: got %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var getResp Response
+	var getResp jsonrpc.Response
 	if err := json.NewDecoder(rec.Body).Decode(&getResp); err != nil {
 		t.Fatalf("Failed to decode get response: %v", err)
 	}
@@ -242,7 +244,7 @@ func TestHandler_TasksList(t *testing.T) {
 		Card: AgentCard{Name: "test-agent"},
 	})
 
-	listReq := Request{
+	listReq := jsonrpc.Request{
 		JSONRPC: "2.0",
 		ID:      mustMarshalRaw("1"),
 		Method:  MethodListTasks,
@@ -260,7 +262,7 @@ func TestHandler_TasksList(t *testing.T) {
 		t.Errorf("Status code mismatch: got %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var resp Response
+	var resp jsonrpc.Response
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
@@ -276,7 +278,7 @@ func TestHandler_InvalidMethod(t *testing.T) {
 		Card: AgentCard{Name: "test-agent"},
 	})
 
-	reqBody := Request{
+	reqBody := jsonrpc.Request{
 		JSONRPC: "2.0",
 		ID:      mustMarshalRaw("1"),
 		Method:  "invalid/method",
@@ -290,7 +292,7 @@ func TestHandler_InvalidMethod(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	var resp Response
+	var resp jsonrpc.Response
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
@@ -298,8 +300,8 @@ func TestHandler_InvalidMethod(t *testing.T) {
 	if resp.Error == nil {
 		t.Error("Expected error for invalid method")
 	}
-	if resp.Error != nil && resp.Error.Code != MethodNotFound {
-		t.Errorf("Error code mismatch: got %d, want %d", resp.Error.Code, MethodNotFound)
+	if resp.Error != nil && resp.Error.Code != jsonrpc.MethodNotFound {
+		t.Errorf("Error code mismatch: got %d, want %d", resp.Error.Code, jsonrpc.MethodNotFound)
 	}
 }
 
@@ -315,7 +317,7 @@ func TestHandler_InvalidJSON(t *testing.T) {
 
 	h.ServeHTTP(rec, req)
 
-	var resp Response
+	var resp jsonrpc.Response
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
@@ -323,8 +325,8 @@ func TestHandler_InvalidJSON(t *testing.T) {
 	if resp.Error == nil {
 		t.Error("Expected error for invalid JSON")
 	}
-	if resp.Error != nil && resp.Error.Code != ParseError {
-		t.Errorf("Error code mismatch: got %d, want %d", resp.Error.Code, ParseError)
+	if resp.Error != nil && resp.Error.Code != jsonrpc.ParseError {
+		t.Errorf("Error code mismatch: got %d, want %d", resp.Error.Code, jsonrpc.ParseError)
 	}
 }
 
