@@ -32,8 +32,17 @@ export function usePolling() {
         setLoading(false);
         return;
       }
-      setError(error instanceof Error ? error.message : 'Unknown error');
-      setConnectionStatus('error');
+
+      // Differentiate network errors from HTTP errors
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        // Network error: gateway unreachable (shutdown, crash, or network issue)
+        setError('Gateway unavailable — connection refused');
+        setConnectionStatus('disconnected');
+      } else {
+        // HTTP error: gateway is running but returned an error
+        setError(error instanceof Error ? error.message : 'Unknown error');
+        setConnectionStatus('error');
+      }
     }
   }, [setGatewayStatus, setTools, setError, setConnectionStatus, setAuthRequired, setLoading]);
 
