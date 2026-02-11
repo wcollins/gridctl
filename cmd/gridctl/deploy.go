@@ -98,6 +98,7 @@ func flashLinkClients(port int) {
 
 	opts := provisioner.LinkOptions{
 		GatewayURL: gatewayURL,
+		Port:       port,
 		ServerName: "gridctl",
 	}
 
@@ -131,7 +132,7 @@ func flashLinkClients(port int) {
 			continue
 		}
 
-		transport := provisioner.TransportDescription(dc.Provisioner.NeedsBridge())
+		transport := provisioner.TransportDescriptionFor(dc.Provisioner)
 		printer.Info(fmt.Sprintf("Linked %s (via %s)", dc.Provisioner.Name(), transport))
 
 		if dc.Provisioner.NeedsBridge() {
