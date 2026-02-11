@@ -26,3 +26,12 @@ func sseConfig(urlKey, gatewayURL string) map[string]any {
 		urlKey: gatewayURL,
 	}
 }
+
+// httpConfig returns the native HTTP configuration for streamable HTTP clients.
+// The transportType varies by client ("http" for Claude Code, "streamable-http" for GeminiCLI).
+func httpConfig(gatewayURL string, transportType string) map[string]any {
+	return map[string]any{
+		"type": transportType,
+		"url":  gatewayURL,
+	}
+}
