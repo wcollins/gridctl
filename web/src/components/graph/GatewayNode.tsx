@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Activity, Server, Wrench, Zap, Bot, Users, Radio, ListChecks } from 'lucide-react';
+import { Activity, Server, Wrench, Zap, Bot, Users, Radio, ListChecks, Monitor } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { StatusDot } from '../ui/StatusDot';
 import type { GatewayNodeData } from '../../types';
@@ -115,6 +115,21 @@ const GatewayNode = memo(({ data, selected }: GatewayNodeProps) => {
             </div>
             <span className="text-sm font-bold text-text-primary tabular-nums">
               {data.sessions}
+            </span>
+          </div>
+        )}
+
+        {/* Linked Clients */}
+        {(data.clientCount ?? 0) > 0 && (
+          <div className="flex items-center justify-between group">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20 group-hover:bg-primary/15 transition-colors">
+                <Monitor size={12} className="text-primary" />
+              </div>
+              <span className="text-xs text-text-secondary font-medium">Clients</span>
+            </div>
+            <span className="text-sm font-bold text-text-primary tabular-nums">
+              {data.clientCount}
             </span>
           </div>
         )}
