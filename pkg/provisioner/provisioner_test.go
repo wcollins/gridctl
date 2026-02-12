@@ -570,7 +570,7 @@ func TestContinueDev_Unlink(t *testing.T) {
 	}
 }
 
-// --- AnythingLLM Tests (flat map) ---
+// --- AnythingLLM Tests (mcpServers wrapper, native SSE) ---
 
 func TestAnythingLLM_Link(t *testing.T) {
 	dir := t.TempDir()
@@ -586,9 +586,13 @@ func TestAnythingLLM_Link(t *testing.T) {
 	}
 
 	data := readTestJSON(t, configPath)
-	entry := data["gridctl"].(map[string]any)
-	if entry["command"] != "npx" {
-		t.Errorf("expected command=npx, got %v", entry["command"])
+	servers := data["mcpServers"].(map[string]any)
+	entry := servers["gridctl"].(map[string]any)
+	if entry["type"] != "sse" {
+		t.Errorf("expected type=sse, got %v", entry["type"])
+	}
+	if entry["url"] != "http://localhost:8180/sse" {
+		t.Errorf("expected url=http://localhost:8180/sse, got %v", entry["url"])
 	}
 }
 
@@ -597,8 +601,10 @@ func TestAnythingLLM_Unlink(t *testing.T) {
 	configPath := filepath.Join(dir, "mcp.json")
 
 	writeTestJSON(t, configPath, map[string]any{
-		"gridctl": map[string]any{"command": "npx"},
-		"other":   map[string]any{"command": "other"},
+		"mcpServers": map[string]any{
+			"gridctl": map[string]any{"type": "sse", "url": "http://localhost:8180/sse"},
+			"other":   map[string]any{"type": "sse", "url": "http://other:3000/sse"},
+		},
 	})
 
 	a := newAnythingLLM()
@@ -607,10 +613,11 @@ func TestAnythingLLM_Unlink(t *testing.T) {
 	}
 
 	data := readTestJSON(t, configPath)
-	if _, ok := data["gridctl"]; ok {
+	servers := data["mcpServers"].(map[string]any)
+	if _, ok := servers["gridctl"]; ok {
 		t.Error("gridctl should have been removed")
 	}
-	if _, ok := data["other"]; !ok {
+	if _, ok := servers["other"]; !ok {
 		t.Error("other should be preserved")
 	}
 }
