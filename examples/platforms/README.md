@@ -10,7 +10,7 @@ Third-party MCP servers that Gridctl runs as containers.
 | `chrome-devtools-mcp.yaml` | Chrome DevTools | Browser automation, debugging, and performance tracing |
 | `context7-mcp.yaml` | Context7 | Up-to-date library documentation and code examples |
 | `github-mcp.yaml` | GitHub | Official GitHub MCP server for repos, issues, PRs |
-| `itential.yaml` | Itential | Itential Platform MCP server in dev-stack network |
+| `zapier-mcp.yaml` | Zapier | Integrate with 8000+ apps through Zapier automation |
 
 ## 🔧 Pattern
 
@@ -53,9 +53,9 @@ Create a GitHub Personal Access Token:
 export GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxxxxxxxxxx
 ```
 
-### itential.yaml
+### zapier-mcp.yaml
 
-Requires [itential-dev-stack](https://github.com/itential/itential-dev-stack) running (creates the `devstack` network).
+Requires a Zapier account and Node.js installed. OAuth authentication is handled via browser flow on first use.
 
 ## 💻 Usage
 
@@ -64,7 +64,7 @@ gridctl deploy examples/platforms/atlassian-mcp.yaml
 gridctl deploy examples/platforms/chrome-devtools-mcp.yaml
 gridctl deploy examples/platforms/context7-mcp.yaml
 gridctl deploy examples/platforms/github-mcp.yaml
-gridctl deploy examples/platforms/itential.yaml
+gridctl deploy examples/platforms/zapier-mcp.yaml
 ```
 
 ## 🔗 References
@@ -73,4 +73,4 @@ gridctl deploy examples/platforms/itential.yaml
 - [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp)
 - [Context7 MCP](https://github.com/upstash/context7)
 - [GitHub MCP Server](https://github.com/github/github-mcp-server)
-- [Itential MCP](https://github.com/itential/itential-mcp)
+- [Zapier MCP](https://github.com/zapier/zapier-mcp)
