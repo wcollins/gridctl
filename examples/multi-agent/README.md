@@ -49,8 +49,8 @@ gridctl deploy examples/multi-agent/basic-a2a.yaml
 
 ```bash
 # List available tools
-curl http://localhost:8080/api/tools | jq '.tools[].name'
+curl http://localhost:8180/api/tools | jq '.tools[].name'
 
 # Fetch agent card
-curl http://localhost:5555/.well-known/agent.json | jq
+curl http://localhost:8180/.well-known/agent.json | jq
 ```
