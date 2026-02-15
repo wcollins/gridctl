@@ -5,7 +5,7 @@
  */
 
 import type { Node } from '@xyflow/react';
-import type { MCPServerStatus, ResourceStatus, AgentStatus, ClientStatus, NodeStatus } from '../../types';
+import type { MCPServerStatus, ResourceStatus, AgentStatus, ClientStatus, NodeStatus, RegistryStatus } from '../../types';
 import { NODE_TYPES } from '../constants';
 import { GATEWAY_NODE_ID } from './edges';
 
@@ -187,6 +187,30 @@ export function createClientNodes(clients: ClientStatus[]): Node[] {
 }
 
 /**
+ * Create registry node (progressive disclosure: only if registry has content)
+ */
+export function createRegistryNode(status: RegistryStatus | null): Node | null {
+  if (!status || ((status.totalPrompts ?? 0) === 0 && (status.totalSkills ?? 0) === 0)) {
+    return null;
+  }
+
+  return {
+    id: 'registry',
+    type: NODE_TYPES.REGISTRY,
+    position: { x: 0, y: 0 },
+    data: {
+      type: 'registry',
+      name: 'Registry',
+      totalPrompts: status.totalPrompts ?? 0,
+      activePrompts: status.activePrompts ?? 0,
+      totalSkills: status.totalSkills ?? 0,
+      activeSkills: status.activeSkills ?? 0,
+    },
+    draggable: true,
+  };
+}
+
+/**
  * Create all nodes for the graph
  */
 export function createAllNodes(
@@ -197,14 +221,22 @@ export function createAllNodes(
   usedByOtherAgents: Set<string>,
   sessions?: number,
   a2aTasks?: number | null,
-  clients: ClientStatus[] = []
+  clients: ClientStatus[] = [],
+  registryStatus?: RegistryStatus | null
 ): Node[] {
   const linkedClients = clients.filter((c) => c.linked);
-  return [
+  const nodes: Node[] = [
     createGatewayNode(gatewayInfo, mcpServers, resources, agents, sessions, a2aTasks, linkedClients.length),
     ...createClientNodes(clients),
     ...createMCPServerNodes(mcpServers),
     ...createAgentNodes(agents, usedByOtherAgents),
     ...createResourceNodes(resources),
   ];
+
+  const registryNode = createRegistryNode(registryStatus ?? null);
+  if (registryNode) {
+    nodes.push(registryNode);
+  }
+
+  return nodes;
 }
