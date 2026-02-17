@@ -190,7 +190,7 @@ export function createClientNodes(clients: ClientStatus[]): Node[] {
  * Create registry node (progressive disclosure: only if registry has content)
  */
 export function createRegistryNode(status: RegistryStatus | null): Node | null {
-  if (!status || ((status.totalPrompts ?? 0) === 0 && (status.totalSkills ?? 0) === 0)) {
+  if (!status || (status.totalSkills ?? 0) === 0) {
     return null;
   }
 
@@ -201,8 +201,6 @@ export function createRegistryNode(status: RegistryStatus | null): Node | null {
     data: {
       type: 'registry',
       name: 'Registry',
-      totalPrompts: status.totalPrompts ?? 0,
-      activePrompts: status.activePrompts ?? 0,
       totalSkills: status.totalSkills ?? 0,
       activeSkills: status.activeSkills ?? 0,
     },
