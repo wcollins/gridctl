@@ -1,4 +1,4 @@
-import type { GatewayStatus, MCPServerStatus, ClientStatus, ToolsListResult, RegistryStatus, Prompt, Skill, ToolCallResult } from '../types';
+import type { GatewayStatus, MCPServerStatus, ClientStatus, ToolsListResult, RegistryStatus, AgentSkill, SkillFile, SkillValidationResult } from '../types';
 
 // Base URL for API calls - empty for same origin
 const API_BASE = '';
@@ -270,75 +270,87 @@ export async function fetchRegistryStatus(): Promise<RegistryStatus> {
   return fetchJSON<RegistryStatus>('/api/registry/status');
 }
 
-// --- Prompts ---
+// --- Agent Skills ---
 
-export async function fetchRegistryPrompts(): Promise<Prompt[]> {
-  return fetchJSON<Prompt[]>('/api/registry/prompts');
+export async function fetchRegistrySkills(): Promise<AgentSkill[]> {
+  return fetchJSON<AgentSkill[]>('/api/registry/skills');
 }
 
-export async function fetchRegistryPrompt(name: string): Promise<Prompt> {
-  return fetchJSON<Prompt>(`/api/registry/prompts/${encodeURIComponent(name)}`);
+export async function fetchRegistrySkill(name: string): Promise<AgentSkill> {
+  return fetchJSON<AgentSkill>(`/api/registry/skills/${encodeURIComponent(name)}`);
 }
 
-export async function createRegistryPrompt(prompt: Prompt): Promise<Prompt> {
-  return mutateJSON<Prompt>('/api/registry/prompts', 'POST', prompt);
+export async function createRegistrySkill(skill: AgentSkill): Promise<AgentSkill> {
+  return mutateJSON<AgentSkill>('/api/registry/skills', 'POST', skill);
 }
 
-export async function updateRegistryPrompt(name: string, prompt: Prompt): Promise<Prompt> {
-  return mutateJSON<Prompt>(`/api/registry/prompts/${encodeURIComponent(name)}`, 'PUT', prompt);
-}
-
-export async function deleteRegistryPrompt(name: string): Promise<void> {
-  return mutateJSON<void>(`/api/registry/prompts/${encodeURIComponent(name)}`, 'DELETE');
-}
-
-export async function activateRegistryPrompt(name: string): Promise<Prompt> {
-  return mutateJSON<Prompt>(`/api/registry/prompts/${encodeURIComponent(name)}/activate`, 'POST');
-}
-
-export async function disableRegistryPrompt(name: string): Promise<Prompt> {
-  return mutateJSON<Prompt>(`/api/registry/prompts/${encodeURIComponent(name)}/disable`, 'POST');
-}
-
-// --- Skills ---
-
-export async function fetchRegistrySkills(): Promise<Skill[]> {
-  return fetchJSON<Skill[]>('/api/registry/skills');
-}
-
-export async function fetchRegistrySkill(name: string): Promise<Skill> {
-  return fetchJSON<Skill>(`/api/registry/skills/${encodeURIComponent(name)}`);
-}
-
-export async function createRegistrySkill(skill: Skill): Promise<Skill> {
-  return mutateJSON<Skill>('/api/registry/skills', 'POST', skill);
-}
-
-export async function updateRegistrySkill(name: string, skill: Skill): Promise<Skill> {
-  return mutateJSON<Skill>(`/api/registry/skills/${encodeURIComponent(name)}`, 'PUT', skill);
+export async function updateRegistrySkill(name: string, skill: AgentSkill): Promise<AgentSkill> {
+  return mutateJSON<AgentSkill>(`/api/registry/skills/${encodeURIComponent(name)}`, 'PUT', skill);
 }
 
 export async function deleteRegistrySkill(name: string): Promise<void> {
   return mutateJSON<void>(`/api/registry/skills/${encodeURIComponent(name)}`, 'DELETE');
 }
 
-export async function activateRegistrySkill(name: string): Promise<Skill> {
-  return mutateJSON<Skill>(`/api/registry/skills/${encodeURIComponent(name)}/activate`, 'POST');
+export async function activateRegistrySkill(name: string): Promise<AgentSkill> {
+  return mutateJSON<AgentSkill>(`/api/registry/skills/${encodeURIComponent(name)}/activate`, 'POST');
 }
 
-export async function disableRegistrySkill(name: string): Promise<Skill> {
-  return mutateJSON<Skill>(`/api/registry/skills/${encodeURIComponent(name)}/disable`, 'POST');
+export async function disableRegistrySkill(name: string): Promise<AgentSkill> {
+  return mutateJSON<AgentSkill>(`/api/registry/skills/${encodeURIComponent(name)}/disable`, 'POST');
 }
 
-export async function testRegistrySkill(
-  name: string,
-  args?: Record<string, unknown>,
-): Promise<ToolCallResult> {
-  return mutateJSON<ToolCallResult>(
-    `/api/registry/skills/${encodeURIComponent(name)}/test`,
-    'POST',
-    args ?? {},
+// --- Skill File Management ---
+
+export async function fetchSkillFiles(skillName: string): Promise<SkillFile[]> {
+  return fetchJSON<SkillFile[]>(`/api/registry/skills/${encodeURIComponent(skillName)}/files`);
+}
+
+export async function fetchSkillFile(skillName: string, filePath: string): Promise<string> {
+  const response = await fetch(
+    `${API_BASE}/api/registry/skills/${encodeURIComponent(skillName)}/files/${filePath}`,
+    { headers: buildHeaders() }
   );
+  if (response.status === 401) throw new AuthError('Authentication required');
+  if (!response.ok) {
+    throw new Error(`Failed to read file: ${response.status} ${response.statusText}`);
+  }
+  return response.text();
+}
+
+export async function writeSkillFile(skillName: string, filePath: string, content: string): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/api/registry/skills/${encodeURIComponent(skillName)}/files/${filePath}`,
+    {
+      method: 'PUT',
+      headers: buildHeaders({ 'Content-Type': 'application/octet-stream' }),
+      body: content,
+    }
+  );
+  if (response.status === 401) throw new AuthError('Authentication required');
+  if (!response.ok) {
+    throw new Error(`Failed to write file: ${response.status} ${response.statusText}`);
+  }
+}
+
+export async function deleteSkillFile(skillName: string, filePath: string): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/api/registry/skills/${encodeURIComponent(skillName)}/files/${filePath}`,
+    {
+      method: 'DELETE',
+      headers: buildHeaders(),
+    }
+  );
+  if (response.status === 401) throw new AuthError('Authentication required');
+  if (!response.ok) {
+    throw new Error(`Failed to delete file: ${response.status} ${response.statusText}`);
+  }
+}
+
+// --- Skill Validation ---
+
+export async function validateSkillContent(content: string): Promise<SkillValidationResult> {
+  return mutateJSON<SkillValidationResult>('/api/registry/skills/validate', 'POST', { content });
 }
 
 // === JSON-RPC Helper (for MCP protocol calls) ===
