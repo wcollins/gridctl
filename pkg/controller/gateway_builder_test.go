@@ -218,11 +218,3 @@ Execute some-server__some-tool with key=value.
 		t.Error("expected API server to have registry server set")
 	}
 }
-
-func toolNames(tools []mcp.Tool) []string {
-	names := make([]string, len(tools))
-	for i, t := range tools {
-		names[i] = t.Name
-	}
-	return names
-}
