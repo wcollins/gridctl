@@ -228,7 +228,7 @@ export function createClientToGatewayEdges(
 export function createGatewayToRegistryEdge(
   registryStatus: RegistryStatus | null
 ): EnhancedEdge[] {
-  if (!registryStatus || ((registryStatus.totalPrompts ?? 0) === 0 && (registryStatus.totalSkills ?? 0) === 0)) {
+  if (!registryStatus || (registryStatus.totalSkills ?? 0) === 0) {
     return [];
   }
 
