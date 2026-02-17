@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useStackStore } from '../stores/useStackStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useRegistryStore } from '../stores/useRegistryStore';
-import { fetchStatus, fetchTools, fetchClients, fetchRegistryStatus, fetchRegistryPrompts, fetchRegistrySkills, AuthError } from '../lib/api';
+import { fetchStatus, fetchTools, fetchClients, fetchRegistryStatus, fetchRegistrySkills, AuthError } from '../lib/api';
 import { POLLING } from '../lib/constants';
 
 export function usePolling() {
@@ -40,20 +40,18 @@ export function usePolling() {
 
       // Fetch registry data — progressive disclosure, never blocks main cycle
       try {
-        const [regStatus, regPrompts, regSkills] = await Promise.all([
+        const [regStatus, regSkills] = await Promise.all([
           fetchRegistryStatus(),
-          fetchRegistryPrompts(),
           fetchRegistrySkills(),
         ]);
         const prevStatus = useRegistryStore.getState().status;
         useRegistryStore.getState().setStatus(regStatus);
-        useRegistryStore.getState().setPrompts(regPrompts);
         useRegistryStore.getState().setSkills(regSkills);
         useRegistryStore.getState().setError(null);
 
         // Refresh graph when registry content changes (node appears/disappears)
-        const hadContent = prevStatus && ((prevStatus.totalPrompts ?? 0) > 0 || (prevStatus.totalSkills ?? 0) > 0);
-        const hasContent = (regStatus.totalPrompts ?? 0) > 0 || (regStatus.totalSkills ?? 0) > 0;
+        const hadContent = prevStatus && (prevStatus.totalSkills ?? 0) > 0;
+        const hasContent = (regStatus.totalSkills ?? 0) > 0;
         if (hadContent !== hasContent) {
           refreshNodesAndEdges();
         }
