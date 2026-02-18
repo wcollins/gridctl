@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -57,6 +58,7 @@ func (r *Router) Clients() []AgentClient {
 	for _, c := range r.clients {
 		clients = append(clients, c)
 	}
+	sort.Slice(clients, func(i, j int) bool { return clients[i].Name() < clients[j].Name() })
 	return clients
 }
 
@@ -82,8 +84,16 @@ func (r *Router) AggregatedTools() []Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	// Collect client names and sort for deterministic output
+	names := make([]string, 0, len(r.clients))
+	for name := range r.clients {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	var tools []Tool
-	for name, client := range r.clients {
+	for _, name := range names {
+		client := r.clients[name]
 		for _, tool := range client.Tools() {
 			// Use original tool name as title for UI display
 			title := tool.Name
