@@ -270,7 +270,7 @@ Shows running gateways and containers.
 
 Connect an LLM client to the gridctl gateway. Without arguments, detects installed clients and presents a selection list.
 
-Supported clients: claude, claude-code, cursor, windsurf, vscode, gemini, continue, cline, anythingllm, roo, zed, goose
+Supported clients: claude, claude-code, cursor, windsurf, vscode, gemini, opencode, continue, cline, anythingllm, roo, zed, goose
 
 | Flag | Short | Description |
 |------|-------|-------------|
