@@ -1198,16 +1198,7 @@ func TestExecutor_StepExecutionResultFields(t *testing.T) {
 		t.Fatal("unexpected error result")
 	}
 
-	// Marshal and check the result structure (StepExecutionResult is logged)
-	// Verify Level field exists in JSON output
-	type minResult struct {
-		Steps []struct {
-			Level    int    `json:"level"`
-			Attempts int    `json:"attempts"`
-			Status   string `json:"status"`
-		} `json:"steps"`
-	}
-	// We can't easily inspect the logged record, but verify the type compiles
+	// Verify StepExecutionResult struct includes all new fields
 	_ = StepExecutionResult{
 		ID:         "test",
 		Tool:       "test-tool",
