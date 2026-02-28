@@ -12,11 +12,13 @@ import {
   GripVertical,
   Eye,
   EyeOff,
+  GitBranch,
 } from 'lucide-react';
 import { marked } from 'marked';
 import { Modal } from '../ui/Modal';
 import { showToast } from '../ui/Toast';
 import { SkillFileTree } from './SkillFileTree';
+import { WorkflowPanel } from '../workflow/WorkflowPanel';
 import { createRegistrySkill, updateRegistrySkill, validateSkillContent } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import type { AgentSkill, ItemState, SkillValidationResult } from '../../types';
@@ -346,6 +348,24 @@ export function SkillEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validation, setValidation] = useState<SkillValidationResult | null>(null);
+  const [activeEditorTab, setActiveEditorTab] = useState<'editor' | 'workflow'>('editor');
+
+  // Detect if skill has a workflow block
+  const hasWorkflow = useMemo(() => {
+    if (!skill) return false;
+    // Check the full skill content (frontmatter) for workflow definition
+    const fullContent = buildSkillMDContent({
+      name: skill.name,
+      description: skill.description,
+      license: skill.license,
+      compatibility: skill.compatibility,
+      allowedTools: skill.allowedTools,
+      metadata: skill.metadata,
+      state: skill.state,
+      body: skill.body ?? '',
+    });
+    return /^workflow:/m.test(fullContent) || /\nworkflow:/m.test(skill.body ?? '');
+  }, [skill]);
 
   // Resizable split pane
   const { ratio, containerRef, handleMouseDown: handleSplitMouseDown, isDragging: splitDragging } = useSplitPane(0.5, 0.25, 0.75);
@@ -532,6 +552,35 @@ export function SkillEditor({
           </div>
         </div>
 
+        {/* Tab bar (only shown when skill has a workflow) */}
+        {hasWorkflow && !isNew && (
+          <div className="flex items-center gap-0 px-5 border-b border-border/30 bg-surface/30 flex-shrink-0">
+            <button
+              onClick={() => setActiveEditorTab('editor')}
+              className={cn(
+                'px-3 py-2 text-xs font-medium transition-all duration-200 border-b-2 -mb-px',
+                activeEditorTab === 'editor'
+                  ? 'text-primary border-primary'
+                  : 'text-text-muted border-transparent hover:text-text-secondary',
+              )}
+            >
+              Markdown
+            </button>
+            <button
+              onClick={() => setActiveEditorTab('workflow')}
+              className={cn(
+                'px-3 py-2 text-xs font-medium transition-all duration-200 border-b-2 -mb-px flex items-center gap-1.5',
+                activeEditorTab === 'workflow'
+                  ? 'text-primary border-primary'
+                  : 'text-text-muted border-transparent hover:text-text-secondary',
+              )}
+            >
+              <GitBranch size={12} />
+              Workflow
+            </button>
+          </div>
+        )}
+
         {/* Error display */}
         {error && (
           <div className="px-5 py-2.5 bg-status-error/10 border-b border-status-error/30 flex-shrink-0">
@@ -539,6 +588,14 @@ export function SkillEditor({
           </div>
         )}
 
+        {/* Workflow tab content */}
+        {activeEditorTab === 'workflow' && hasWorkflow && !isNew && skill && (
+          <WorkflowPanel skillName={skill.name} />
+        )}
+
+        {/* Editor tab content */}
+        {activeEditorTab === 'editor' && (
+          <>
         {/* Frontmatter helpers (collapsible, scrollable) */}
         <div className="border-b border-border/30 flex-shrink-0">
           <button
@@ -724,6 +781,8 @@ export function SkillEditor({
             <span>{charCount} chars</span>
           </div>
         </div>
+          </>
+        )}
       </div>
     </Modal>
   );
