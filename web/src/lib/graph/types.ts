@@ -22,6 +22,8 @@ export interface LayoutOutput {
 export interface LayoutOptions {
   /** Map of node IDs to preserved positions (for user-dragged nodes) */
   preservedPositions?: Map<string, { x: number; y: number }>;
+  /** Whether nodes should use compact dimensions */
+  compact?: boolean;
 }
 
 /**

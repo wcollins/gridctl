@@ -6,10 +6,13 @@ export const LAYOUT = {
   GATEWAY_HEIGHT: 160,
   NODE_WIDTH: 256,
   NODE_HEIGHT: 140,
+  NODE_HEIGHT_COMPACT: 48,    // Compact mode: header only
   AGENT_WIDTH: 160,    // Agent node width (matches client for column alignment)
   AGENT_HEIGHT: 144,   // Agent node height
+  AGENT_HEIGHT_COMPACT: 48,   // Agent compact mode height
   CLIENT_WIDTH: 160,   // Linked client node width
   CLIENT_HEIGHT: 120,  // Linked client node height
+  CLIENT_HEIGHT_COMPACT: 48,  // Client compact mode height
   // Dagre layout spacing
   NODE_SPACING: 60,    // Vertical spacing between nodes in same rank
   RANK_SPACING: 120,   // Horizontal spacing between tiers (gateway -> servers -> etc)

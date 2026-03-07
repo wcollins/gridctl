@@ -3,6 +3,8 @@ import { Handle, Position } from '@xyflow/react';
 import { Bot, Globe, Server, Hash, Zap } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { StatusDot } from '../ui/StatusDot';
+import { useUIStore } from '../../stores/useUIStore';
+import { LAYOUT } from '../../lib/constants';
 import type { AgentNodeData } from '../../types';
 
 interface AgentNodeProps {
@@ -11,20 +13,80 @@ interface AgentNodeProps {
 }
 
 const AgentNode = memo(({ data, selected }: AgentNodeProps) => {
+  const isCompact = useUIStore((s) => s.compactCards);
   const isRemote = data.variant === 'remote';
   const hasA2A = data.hasA2A;
 
   // Determine primary color based on variant and A2A capability
-  // Local without A2A: purple (tertiary)
-  // Local with A2A: purple base + teal accent ("Cartridge" pattern)
-  // Remote (always has A2A): teal (secondary)
   const primaryColor = isRemote ? 'secondary' : 'tertiary';
+
+  if (isCompact) {
+    return (
+      <div
+        className={cn(
+          'w-40 rounded-lg relative',
+          'backdrop-blur-xl border-2 transition-all duration-200 ease-out',
+          isRemote
+            ? 'bg-gradient-to-br from-surface/95 to-secondary/[0.08]'
+            : hasA2A
+              ? 'bg-gradient-to-br from-surface/95 via-tertiary/[0.03] to-secondary/[0.06]'
+              : 'bg-gradient-to-br from-surface/95 to-tertiary/[0.05]',
+          'flex items-center px-2.5 gap-2',
+          selected && `border-${primaryColor} shadow-glow-${primaryColor} ring-2 ring-${primaryColor}/30`,
+          !selected && `border-${primaryColor}/30 hover:shadow-node-hover hover:border-${primaryColor}/50`
+        )}
+        style={{
+          height: LAYOUT.AGENT_HEIGHT_COMPACT,
+          borderColor: selected ? `var(--color-${primaryColor})` : undefined,
+        }}
+      >
+        <div className={cn(
+          'p-1.5 rounded-md border flex-shrink-0',
+          isRemote
+            ? 'bg-secondary/10 border-secondary/30'
+            : 'bg-tertiary/10 border-tertiary/30'
+        )}>
+          <Bot size={14} className={isRemote ? 'text-secondary' : 'text-tertiary'} />
+        </div>
+        <span className="font-semibold text-xs text-text-primary truncate min-w-0">
+          {data.name}
+        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+          {hasA2A && (
+            <Zap size={10} className="text-secondary" />
+          )}
+          <StatusDot status={data.status} size="sm" />
+        </div>
+
+        <Handle
+          type="target"
+          position={Position.Left}
+          className={cn(
+            '!w-2.5 !h-2.5 !border-2 !border-background !rounded-full',
+            isRemote ? '!bg-secondary' : '!bg-tertiary',
+            'transition-all duration-200 hover:!scale-125'
+          )}
+          id="input"
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          className={cn(
+            '!w-2.5 !h-2.5 !border-2 !border-background !rounded-full',
+            hasA2A ? '!bg-secondary' : '!bg-tertiary',
+            'transition-all duration-200 hover:!scale-125'
+          )}
+          id="output"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
       className={cn(
         'w-40 h-36 rounded-lg',
-        'backdrop-blur-xl border-2 transition-all duration-300 ease-out',
+        'backdrop-blur-xl border-2 transition-all duration-200 ease-out',
         // Gradient background - purple for local, teal tint for remote
         isRemote
           ? 'bg-gradient-to-br from-surface/95 to-secondary/[0.08]'
