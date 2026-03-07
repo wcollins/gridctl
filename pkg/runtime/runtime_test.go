@@ -317,12 +317,46 @@ func TestOrchestrator_Up_PingError(t *testing.T) {
 		Version: "1",
 		Name:    "test-topo",
 		Network: config.Network{Name: "test-net", Driver: "bridge"},
+		MCPServers: []config.MCPServer{
+			{Name: "server1", Image: "nginx:latest", Port: 80},
+		},
 	}
 
 	ctx := context.Background()
 	_, err := orch.Up(ctx, topo, UpOptions{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestOrchestrator_Up_NoPingWhenNoDocker(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRT := NewMockWorkloadRuntime(ctrl)
+	// Ping and EnsureNetwork should NOT be called for non-container stacks
+	mockRT.EXPECT().Ping(gomock.Any()).Times(0)
+	mockRT.EXPECT().EnsureNetwork(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockRT.EXPECT().Close().Return(nil).AnyTimes()
+	mockBuilder := &MockBuilder{}
+
+	orch := NewOrchestrator(mockRT, mockBuilder)
+	orch.SetLogger(testLogger())
+
+	topo := &config.Stack{
+		Version: "1",
+		Name:    "test-topo",
+		MCPServers: []config.MCPServer{
+			{Name: "local-server", Command: []string{"npx", "server"}},
+			{Name: "ext-server", URL: "http://localhost:8080"},
+		},
+	}
+
+	ctx := context.Background()
+	result, err := orch.Up(ctx, topo, UpOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.MCPServers) != 2 {
+		t.Errorf("expected 2 MCP servers, got %d", len(result.MCPServers))
 	}
 }
 
