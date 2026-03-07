@@ -72,51 +72,50 @@ func runStatus(stack string) error {
 		gateways = append(gateways, gw)
 	}
 
-	// Show container status
+	// Show container status (graceful degradation when Docker unavailable)
+	var containers []output.ContainerSummary
 	rt, err := runtime.New()
 	if err != nil {
-		return fmt.Errorf("failed to create runtime: %w", err)
-	}
-	defer rt.Close()
-
-	ctx := context.Background()
-	workloadStatuses, err := rt.Status(ctx, stack)
-	if err != nil {
-		return fmt.Errorf("failed to get status: %w", err)
-	}
-
-	if len(workloadStatuses) == 0 && len(gateways) == 0 {
-		printer.Info("No managed gateways or containers found")
-		return nil
-	}
-
-	// Build container summaries
-	var containers []output.ContainerSummary
-	for _, s := range workloadStatuses {
-		// Get workload name from labels
-		var workloadName string
-		if s.Labels != nil {
-			if name, ok := s.Labels[runtime.LabelMCPServer]; ok {
-				workloadName = name
-			} else if name, ok := s.Labels[runtime.LabelResource]; ok {
-				workloadName = name
-			} else if name, ok := s.Labels[runtime.LabelAgent]; ok {
-				workloadName = name
+		printer.Warn("could not initialize runtime — container status unavailable", "error", err)
+	} else {
+		defer rt.Close()
+		ctx := context.Background()
+		workloadStatuses, statusErr := rt.Status(ctx, stack)
+		if statusErr != nil {
+			printer.Warn("docker unavailable — container status not shown", "error", statusErr)
+		} else {
+			for _, s := range workloadStatuses {
+				// Get workload name from labels
+				var workloadName string
+				if s.Labels != nil {
+					if name, ok := s.Labels[runtime.LabelMCPServer]; ok {
+						workloadName = name
+					} else if name, ok := s.Labels[runtime.LabelResource]; ok {
+						workloadName = name
+					} else if name, ok := s.Labels[runtime.LabelAgent]; ok {
+						workloadName = name
+					}
+				}
+				// Truncate ID for display
+				id := string(s.ID)
+				if len(id) > 12 {
+					id = id[:12]
+				}
+				containers = append(containers, output.ContainerSummary{
+					ID:      id,
+					Name:    workloadName,
+					Type:    string(s.Type),
+					Image:   s.Image,
+					State:   string(s.State),
+					Message: s.Message,
+				})
 			}
 		}
-		// Truncate ID for display
-		id := string(s.ID)
-		if len(id) > 12 {
-			id = id[:12]
-		}
-		containers = append(containers, output.ContainerSummary{
-			ID:      id,
-			Name:    workloadName,
-			Type:    string(s.Type),
-			Image:   s.Image,
-			State:   string(s.State),
-			Message: s.Message,
-		})
+	}
+
+	if len(containers) == 0 && len(gateways) == 0 {
+		printer.Info("No managed gateways or containers found")
+		return nil
 	}
 
 	// Print tables
