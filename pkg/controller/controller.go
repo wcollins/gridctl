@@ -54,7 +54,8 @@ type Config struct {
 	Foreground  bool
 	Watch       bool
 	DaemonChild bool
-	CodeMode    bool // Enable code mode via CLI flag
+	CodeMode    bool   // Enable code mode via CLI flag
+	Runtime     string // Explicit runtime selection (docker, podman)
 }
 
 // StackController orchestrates the full deploy lifecycle.
@@ -120,7 +121,7 @@ func (sc *StackController) Deploy(ctx context.Context) error {
 	printer := sc.createPrinter(stack)
 
 	// Start containers
-	rt, err := runtime.New()
+	rt, err := sc.createRuntime()
 	if err != nil {
 		return fmt.Errorf("failed to create runtime: %w", err)
 	}
@@ -176,7 +177,7 @@ func (sc *StackController) checkState(stack *config.Stack) error {
 
 // runDaemonChild runs the gateway as a daemon child process.
 func (sc *StackController) runDaemonChild(ctx context.Context, stack *config.Stack) error {
-	rt, err := runtime.New()
+	rt, err := sc.createRuntime()
 	if err != nil {
 		return fmt.Errorf("failed to create runtime: %w", err)
 	}
@@ -303,6 +304,24 @@ func (sc *StackController) newGatewayBuilder(stack *config.Stack, rt *runtime.Or
 	return builder
 }
 
+// createRuntime detects the container runtime and creates an Orchestrator.
+func (sc *StackController) createRuntime() (*runtime.Orchestrator, error) {
+	if sc.config.Runtime != "" {
+		info, err := runtime.DetectRuntime(runtime.DetectOptions{Explicit: sc.config.Runtime})
+		if err != nil {
+			return nil, err
+		}
+		return runtime.NewWithInfo(info)
+	}
+	// Try auto-detection, fall back to default factory
+	info, err := runtime.DetectRuntime(runtime.DetectOptions{})
+	if err != nil {
+		// If auto-detection fails, try the default factory (backward compat)
+		return runtime.New()
+	}
+	return runtime.NewWithInfo(info)
+}
+
 // BuildWorkloadSummaries creates summary data for the status table.
 func BuildWorkloadSummaries(stack *config.Stack, result *runtime.UpResult) []output.WorkloadSummary {
 	var summaries []output.WorkloadSummary
@@ -363,7 +382,7 @@ func getRunningContainers(ctx context.Context, rt *runtime.Orchestrator, stack *
 
 	// Only query Docker for container statuses when the stack has container workloads
 	var statuses []runtime.WorkloadStatus
-	if stack.NeedsDocker() {
+	if stack.NeedsContainerRuntime() {
 		var err error
 		statuses, err = rt.Status(ctx, stack.Name)
 		if err != nil {
