@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var runtimeFlag string
+
 var rootCmd = &cobra.Command{
 	Use:   "gridctl",
 	Short: "MCP orchestration tool",
@@ -20,6 +22,8 @@ them via a single MCP gateway.`,
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVar(&runtimeFlag, "runtime", "", "Container runtime to use (docker, podman). Auto-detected if not set.")
+
 	initHelp()
 
 	rootCmd.AddCommand(deployCmd)
@@ -29,6 +33,7 @@ func init() {
 	rootCmd.AddCommand(linkCmd)
 	rootCmd.AddCommand(unlinkCmd)
 	rootCmd.AddCommand(vaultCmd)
+	rootCmd.AddCommand(infoCmd)
 }
 
 func Execute() {

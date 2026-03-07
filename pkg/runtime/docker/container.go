@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/gridctl/gridctl/pkg/dockerclient"
+	"github.com/gridctl/gridctl/pkg/runtime"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -25,6 +26,7 @@ type ContainerConfig struct {
 	Labels      map[string]string
 	Transport   string   // "http" or "stdio"
 	Volumes     []string // Volume mounts in "host:container" or "host:container:mode" format
+	RuntimeInfo *runtime.RuntimeInfo // Runtime info for host alias and volume labels
 }
 
 // CreateContainer creates a new container with the given configuration.
@@ -67,11 +69,23 @@ func CreateContainer(ctx context.Context, cli dockerclient.DockerClient, cfg Con
 		}
 	}
 
+	// Determine host alias based on runtime
+	hostAlias := "host.docker.internal"
+	if cfg.RuntimeInfo != nil {
+		hostAlias = cfg.RuntimeInfo.HostAliasHostname()
+	}
+
+	// Apply SELinux volume labels when needed
+	volumes := cfg.Volumes
+	if cfg.RuntimeInfo != nil {
+		volumes = runtime.ApplyVolumeLabels(volumes, cfg.RuntimeInfo)
+	}
+
 	hostConfig := &container.HostConfig{
 		NetworkMode:  container.NetworkMode(cfg.NetworkName),
 		PortBindings: portBindings,
-		Binds:        cfg.Volumes,
-		ExtraHosts:   []string{"host.docker.internal:host-gateway"},
+		Binds:        volumes,
+		ExtraHosts:   []string{hostAlias + ":host-gateway"},
 	}
 
 	networkConfig := &network.NetworkingConfig{

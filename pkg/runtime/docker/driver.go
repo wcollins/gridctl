@@ -14,8 +14,9 @@ import (
 
 // DockerRuntime implements runtime.WorkloadRuntime using Docker.
 type DockerRuntime struct {
-	cli    dockerclient.DockerClient
-	logger *slog.Logger
+	cli         dockerclient.DockerClient
+	logger      *slog.Logger
+	runtimeInfo *runtime.RuntimeInfo
 }
 
 // New creates a new DockerRuntime instance.
@@ -25,6 +26,15 @@ func New() (*DockerRuntime, error) {
 		return nil, err
 	}
 	return &DockerRuntime{cli: cli, logger: logging.NewDiscardLogger()}, nil
+}
+
+// NewWithInfo creates a DockerRuntime using explicit RuntimeInfo for socket selection.
+func NewWithInfo(info *runtime.RuntimeInfo) (*DockerRuntime, error) {
+	cli, err := NewDockerClientWithHost(info.DockerHost())
+	if err != nil {
+		return nil, err
+	}
+	return &DockerRuntime{cli: cli, logger: logging.NewDiscardLogger(), runtimeInfo: info}, nil
 }
 
 // NewWithClient creates a DockerRuntime with an existing client (for testing).
@@ -43,6 +53,11 @@ func (d *DockerRuntime) SetLogger(logger *slog.Logger) {
 // This is needed by MCP gateway for stdio transport and container logs.
 func (d *DockerRuntime) Client() dockerclient.DockerClient {
 	return d.cli
+}
+
+// RuntimeInfo returns the runtime detection info.
+func (d *DockerRuntime) RuntimeInfo() *runtime.RuntimeInfo {
+	return d.runtimeInfo
 }
 
 // Start starts a workload and returns its status.
@@ -74,6 +89,7 @@ func (d *DockerRuntime) Start(ctx context.Context, cfg runtime.WorkloadConfig) (
 		Labels:      cfg.Labels,
 		Transport:   cfg.Transport,
 		Volumes:     cfg.Volumes,
+		RuntimeInfo: d.runtimeInfo,
 	}
 
 	containerID, err = CreateContainer(ctx, d.cli, dockerCfg)
