@@ -5,6 +5,8 @@ import { cn } from '../../lib/cn';
 import { Badge } from '../ui/Badge';
 import { StatusDot } from '../ui/StatusDot';
 import { getTransportIcon, getTransportColorClasses } from '../../lib/transport';
+import { useUIStore } from '../../stores/useUIStore';
+import { LAYOUT } from '../../lib/constants';
 import type { MCPServerNodeData, ResourceNodeData } from '../../types';
 
 export type CustomNodeData = MCPServerNodeData | ResourceNodeData;
@@ -15,6 +17,7 @@ interface CustomNodeProps {
 }
 
 const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
+  const isCompact = useUIStore((s) => s.compactCards);
   const isServer = data.type === 'mcp-server';
   const isExternal = isServer && (data as MCPServerNodeData).external;
   const isLocalProcess = isServer && (data as MCPServerNodeData).localProcess;
@@ -43,7 +46,7 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
     <div
       className={cn(
         'w-64 rounded-xl relative',
-        'backdrop-blur-xl border transition-all duration-300 ease-out',
+        'backdrop-blur-xl border transition-all duration-200 ease-out',
         isServer
           ? 'bg-gradient-to-br from-surface/95 to-violet-500/[0.03] border-violet-500/30'
           : 'bg-gradient-to-br from-surface/95 to-secondary/[0.02] border-border/50',
@@ -51,11 +54,13 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         selected && !isServer && 'border-secondary shadow-glow-secondary ring-1 ring-secondary/30',
         !selected && 'hover:shadow-node-hover hover:border-text-muted/30'
       )}
+      style={{ height: isCompact ? LAYOUT.NODE_HEIGHT_COMPACT : undefined }}
     >
 
       {/* Header with gradient accent */}
       <div className={cn(
-        'px-3 py-2.5 flex items-center justify-between border-b relative',
+        'px-3 py-2.5 flex items-center justify-between relative',
+        !isCompact && 'border-b',
         isServer
           ? 'border-violet-500/10 bg-violet-500/[0.03]'
           : 'border-secondary/10 bg-secondary/[0.03]'
@@ -86,152 +91,168 @@ const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
             {data.name}
           </span>
         </div>
-        <StatusDot status={data.status} />
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Inline tool count in compact mode */}
+          {isCompact && isServer && toolCount !== null && toolCount !== undefined && (
+            <span className="text-[10px] text-text-muted font-mono">
+              {toolCount}t
+            </span>
+          )}
+          <StatusDot status={data.status} />
+        </div>
       </div>
 
-      {/* Body */}
-      <div className="p-3 space-y-2.5">
-        {/* Endpoint Row (for HTTP MCP servers) */}
-        {isServer && hasValidEndpoint && (
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Wifi size={10} className="text-secondary" />
+      {/* Body - hidden in compact mode */}
+      <div
+        className={cn(
+          'overflow-hidden transition-all duration-200 ease-out',
+          isCompact ? 'max-h-0 opacity-0 pointer-events-none' : 'max-h-96 opacity-100'
+        )}
+      >
+        <div className="p-3 space-y-2.5">
+          {/* Endpoint Row (for HTTP MCP servers) */}
+          {isServer && hasValidEndpoint && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Wifi size={10} className="text-secondary" />
+                <span className="text-[10px] uppercase tracking-widest font-medium text-text-muted">
+                  Endpoint
+                </span>
+              </div>
+              <div className="text-xs text-text-secondary font-mono truncate bg-background/50 px-2 py-1 rounded-md" title={endpoint}>
+                {endpoint}
+              </div>
+            </div>
+          )}
+
+          {/* Container Row (for stdio MCP servers) */}
+          {isServer && !hasValidEndpoint && hasValidContainerId && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Hash size={10} className="text-violet-400" />
+                <span className="text-[10px] uppercase tracking-widest font-medium text-text-muted">
+                  Container
+                </span>
+              </div>
+              <div className="text-xs text-text-secondary font-mono truncate bg-background/50 px-2 py-1 rounded-md" title={containerId}>
+                {containerId.slice(0, 12)}
+              </div>
+            </div>
+          )}
+
+          {/* Image Row (for resources) */}
+          {!isServer && image && (
+            <div className="space-y-1">
               <span className="text-[10px] uppercase tracking-widest font-medium text-text-muted">
-                Endpoint
+                Image
+              </span>
+              <div className="text-xs text-text-secondary font-mono truncate bg-background/50 px-2 py-1 rounded-md" title={image}>
+                {image}
+              </div>
+            </div>
+          )}
+
+          {/* Transport + Tool count (for MCP servers) */}
+          {isServer && transport && (
+            <div className="flex items-center justify-between text-xs pt-1">
+              <div className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded-md',
+                getTransportColorClasses(transport)
+              )}>
+                <TransportIcon size={11} />
+                <span className="uppercase text-[10px] tracking-wider font-medium">
+                  {transport}
+                </span>
+              </div>
+              {toolCount !== null && toolCount !== undefined && (
+                <span className="text-text-secondary font-mono text-[11px]">
+                  {toolCount} tools
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Network (for resources) */}
+          {!isServer && network && (
+            <div className="flex items-center gap-1.5 text-xs text-secondary bg-secondary/10 px-2 py-1 rounded-md w-fit">
+              <Server size={11} />
+              <span className="font-medium">{network}</span>
+            </div>
+          )}
+
+          {/* Health indicator (MCP servers only) */}
+          {isServer && (data as MCPServerNodeData).healthy === false && (
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-status-error/5 border border-status-error/15">
+              <HeartPulse size={11} className="text-status-error flex-shrink-0" />
+              <span className="text-xs text-status-error/80 font-mono truncate" title={(data as MCPServerNodeData).healthError}>
+                {(data as MCPServerNodeData).healthError || 'Health check failed'}
               </span>
             </div>
-            <div className="text-xs text-text-secondary font-mono truncate bg-background/50 px-2 py-1 rounded-md" title={endpoint}>
-              {endpoint}
+          )}
+          {isServer && (data as MCPServerNodeData).healthy === true && (
+            <div className="flex items-center gap-1.5 text-xs text-text-muted">
+              <HeartPulse size={10} className="text-status-running" />
+              <span>Healthy</span>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Container Row (for stdio MCP servers) */}
-        {isServer && !hasValidEndpoint && hasValidContainerId && (
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Hash size={10} className="text-violet-400" />
-              <span className="text-[10px] uppercase tracking-widest font-medium text-text-muted">
+          {/* Status Badge + Type indicator */}
+          <div className="pt-1 flex items-center gap-2">
+            <Badge status={data.status}>
+              <span className="capitalize">{data.status}</span>
+            </Badge>
+            {isServer && !isExternal && !isLocalProcess && !isSSH && !isOpenAPI && (
+              <div className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
+                'text-[10px] font-semibold tracking-wide',
+                'text-text-muted border-border/50'
+              )}>
+                <Terminal size={10} />
                 Container
-              </span>
-            </div>
-            <div className="text-xs text-text-secondary font-mono truncate bg-background/50 px-2 py-1 rounded-md" title={containerId}>
-              {containerId.slice(0, 12)}
-            </div>
-          </div>
-        )}
-
-        {/* Image Row (for resources) */}
-        {!isServer && image && (
-          <div className="space-y-1">
-            <span className="text-[10px] uppercase tracking-widest font-medium text-text-muted">
-              Image
-            </span>
-            <div className="text-xs text-text-secondary font-mono truncate bg-background/50 px-2 py-1 rounded-md" title={image}>
-              {image}
-            </div>
-          </div>
-        )}
-
-        {/* Transport + Tool count (for MCP servers) */}
-        {isServer && transport && (
-          <div className="flex items-center justify-between text-xs pt-1">
-            <div className={cn(
-              'flex items-center gap-1.5 px-2 py-1 rounded-md',
-              getTransportColorClasses(transport)
-            )}>
-              <TransportIcon size={11} />
-              <span className="uppercase text-[10px] tracking-wider font-medium">
-                {transport}
-              </span>
-            </div>
-            {toolCount !== null && toolCount !== undefined && (
-              <span className="text-text-secondary font-mono text-[11px]">
-                {toolCount} tools
-              </span>
+              </div>
+            )}
+            {isExternal && (
+              <div className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
+                'text-[10px] font-semibold tracking-wide',
+                'text-text-muted border-border/50'
+              )}>
+                <Globe size={10} />
+                External
+              </div>
+            )}
+            {isLocalProcess && (
+              <div className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
+                'text-[10px] font-semibold tracking-wide',
+                'text-text-muted border-border/50'
+              )}>
+                <Cpu size={10} />
+                Local
+              </div>
+            )}
+            {isSSH && (
+              <div className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
+                'text-[10px] font-semibold tracking-wide',
+                'text-text-muted border-border/50'
+              )}>
+                <KeyRound size={10} />
+                SSH
+              </div>
+            )}
+            {isOpenAPI && (
+              <div className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
+                'text-[10px] font-semibold tracking-wide',
+                'text-text-muted border-border/50'
+              )}>
+                <FileJson size={10} />
+                OpenAPI
+              </div>
             )}
           </div>
-        )}
-
-        {/* Network (for resources) */}
-        {!isServer && network && (
-          <div className="flex items-center gap-1.5 text-xs text-secondary bg-secondary/10 px-2 py-1 rounded-md w-fit">
-            <Server size={11} />
-            <span className="font-medium">{network}</span>
-          </div>
-        )}
-
-        {/* Health indicator (MCP servers only) */}
-        {isServer && (data as MCPServerNodeData).healthy === false && (
-          <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-status-error/5 border border-status-error/15">
-            <HeartPulse size={11} className="text-status-error flex-shrink-0" />
-            <span className="text-xs text-status-error/80 font-mono truncate" title={(data as MCPServerNodeData).healthError}>
-              {(data as MCPServerNodeData).healthError || 'Health check failed'}
-            </span>
-          </div>
-        )}
-        {isServer && (data as MCPServerNodeData).healthy === true && (
-          <div className="flex items-center gap-1.5 text-xs text-text-muted">
-            <HeartPulse size={10} className="text-status-running" />
-            <span>Healthy</span>
-          </div>
-        )}
-
-        {/* Status Badge + Type indicator */}
-        <div className="pt-1 flex items-center gap-2">
-          <Badge status={data.status}>
-            <span className="capitalize">{data.status}</span>
-          </Badge>
-          {isServer && !isExternal && !isLocalProcess && !isSSH && !isOpenAPI && (
-            <div className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
-              'text-[10px] font-semibold tracking-wide',
-              'text-text-muted border-border/50'
-            )}>
-              <Terminal size={10} />
-              Container
-            </div>
-          )}
-          {isExternal && (
-            <div className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
-              'text-[10px] font-semibold tracking-wide',
-              'text-text-muted border-border/50'
-            )}>
-              <Globe size={10} />
-              External
-            </div>
-          )}
-          {isLocalProcess && (
-            <div className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
-              'text-[10px] font-semibold tracking-wide',
-              'text-text-muted border-border/50'
-            )}>
-              <Cpu size={10} />
-              Local
-            </div>
-          )}
-          {isSSH && (
-            <div className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
-              'text-[10px] font-semibold tracking-wide',
-              'text-text-muted border-border/50'
-            )}>
-              <KeyRound size={10} />
-              SSH
-            </div>
-          )}
-          {isOpenAPI && (
-            <div className={cn(
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border',
-              'text-[10px] font-semibold tracking-wide',
-              'text-text-muted border-border/50'
-            )}>
-              <FileJson size={10} />
-              OpenAPI
-            </div>
-          )}
         </div>
       </div>
 
