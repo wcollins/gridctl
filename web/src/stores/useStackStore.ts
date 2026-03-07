@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import { transformToNodesAndEdges } from '../lib/transform';
 import { useRegistryStore } from './useRegistryStore';
+import { useUIStore } from './useUIStore';
 
 interface StackState {
   // === Raw API Data ===
@@ -118,6 +119,7 @@ export const useStackStore = create<StackState>()(
       if (!gatewayInfo) return;
 
       const registryStatus = useRegistryStore.getState().status;
+      const isCompact = useUIStore.getState().compactCards;
 
       // Only preserve positions for nodes the user has explicitly dragged
       const { nodes, edges } = transformToNodesAndEdges(
@@ -130,7 +132,8 @@ export const useStackStore = create<StackState>()(
         a2aTasks,
         clients,
         registryStatus,
-        codeMode
+        codeMode,
+        isCompact
       );
       set({ nodes, edges });
     },
@@ -140,6 +143,7 @@ export const useStackStore = create<StackState>()(
       if (!gatewayInfo) return;
 
       const registryStatus = useRegistryStore.getState().status;
+      const isCompact = useUIStore.getState().compactCards;
 
       // Clear dragged positions and recalculate from scratch
       const { nodes, edges } = transformToNodesAndEdges(
@@ -152,7 +156,8 @@ export const useStackStore = create<StackState>()(
         a2aTasks,
         clients,
         registryStatus,
-        codeMode
+        codeMode,
+        isCompact
       );
       set({ nodes, edges, draggedPositions: new Map() });
     },
