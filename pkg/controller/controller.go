@@ -358,13 +358,18 @@ func BuildWorkloadSummaries(stack *config.Stack, result *runtime.UpResult) []out
 
 // getRunningContainers retrieves info about already-running containers and external servers.
 func getRunningContainers(ctx context.Context, rt *runtime.Orchestrator, stack *config.Stack) (*runtime.UpResult, error) {
-	statuses, err := rt.Status(ctx, stack.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	result := &runtime.UpResult{}
 	foundServers := make(map[string]bool)
+
+	// Only query Docker for container statuses when the stack has container workloads
+	var statuses []runtime.WorkloadStatus
+	if stack.NeedsDocker() {
+		var err error
+		statuses, err = rt.Status(ctx, stack.Name)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	for _, status := range statuses {
 		var workloadName string
