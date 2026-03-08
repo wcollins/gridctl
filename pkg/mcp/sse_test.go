@@ -1405,3 +1405,71 @@ func TestSSEServer_HandleMessage_ResourcesRead(t *testing.T) {
 		t.Error("expected non-empty content text")
 	}
 }
+
+func TestSSEServer_HandleMessage_PromptsGet_NilParams(t *testing.T) {
+	sse := setupSSEWithRegistry(t)
+
+	sseW := httptest.NewRecorder()
+	session := &SSESession{ID: "test-session", Writer: sseW, Flusher: sseW, Done: make(chan struct{})}
+	sse.mu.Lock()
+	sse.sessions[session.ID] = session
+	sse.mu.Unlock()
+
+	// Send prompts/get with nil params (no params field at all)
+	resp := ssePost(t, sse, "test-session", "prompts/get", nil)
+	if resp.Error == nil {
+		t.Fatal("expected error for nil params on prompts/get")
+	}
+}
+
+func TestSSEServer_HandleMessage_ResourcesRead_NilParams(t *testing.T) {
+	sse := setupSSEWithRegistry(t)
+
+	sseW := httptest.NewRecorder()
+	session := &SSESession{ID: "test-session", Writer: sseW, Flusher: sseW, Done: make(chan struct{})}
+	sse.mu.Lock()
+	sse.sessions[session.ID] = session
+	sse.mu.Unlock()
+
+	// Send resources/read with nil params
+	resp := ssePost(t, sse, "test-session", "resources/read", nil)
+	if resp.Error == nil {
+		t.Fatal("expected error for nil params on resources/read")
+	}
+}
+
+func TestSSEServer_HandleMessage_PromptsGet_InvalidParams(t *testing.T) {
+	sse := setupSSEWithRegistry(t)
+
+	sseW := httptest.NewRecorder()
+	session := &SSESession{ID: "test-session", Writer: sseW, Flusher: sseW, Done: make(chan struct{})}
+	sse.mu.Lock()
+	sse.sessions[session.ID] = session
+	sse.mu.Unlock()
+
+	// Send prompts/get with a name that doesn't exist
+	resp := ssePost(t, sse, "test-session", "prompts/get", map[string]any{
+		"name": "nonexistent-prompt",
+	})
+	if resp.Error == nil {
+		t.Fatal("expected error for nonexistent prompt")
+	}
+}
+
+func TestSSEServer_HandleMessage_ResourcesRead_InvalidParams(t *testing.T) {
+	sse := setupSSEWithRegistry(t)
+
+	sseW := httptest.NewRecorder()
+	session := &SSESession{ID: "test-session", Writer: sseW, Flusher: sseW, Done: make(chan struct{})}
+	sse.mu.Lock()
+	sse.sessions[session.ID] = session
+	sse.mu.Unlock()
+
+	// Send resources/read with invalid URI
+	resp := ssePost(t, sse, "test-session", "resources/read", map[string]any{
+		"uri": "skills://registry/nonexistent",
+	})
+	if resp.Error == nil {
+		t.Fatal("expected error for nonexistent resource")
+	}
+}
