@@ -8,13 +8,173 @@ All notable changes to gridctl will be documented in this file.
 ### Bug Fixes
 
 
+- Remove unused type flagged by linter
+- Make security scans non-blocking in CI
+- Lower controller coverage threshold to 59%
+- Resolve TypeScript errors in GatewayPanel test
+- Remove unused import in LogViewer test
+- Remove unused imports in hooks test
+
+### Features
+
+
+- Add workflow types to registry package
+- Render workflow fields in SKILL.md
+- Add workflow DAG builder with cycle detection
+- Add workflow validation rules
+- Add template engine for skill workflows
+- Add ToMCPTool method for executable skills
+- Add workflow executor engine
+- Integrate executor with registry server
+- Wire executor into gateway builder
+- Add workflow REST API endpoints
+- Add parallel execution, retry, and timeout to workflow executor
+- Pass executor options through server constructor
+- Add workflow TypeScript types
+- Add workflow API functions
+- Add workflow text zoom and blink CSS
+- Add workflow Zustand store
+- Add workflow detached window state
+- Add workflow font size zoom hook
+- Support workflow window in broadcast channel
+- Add workflow window config to manager
+- Add StepNode React Flow component
+- Add WorkflowGraph DAG visualization
+- Add WorkflowInspector step detail panel
+- Add WorkflowRunner test panel
+- Add WorkflowPanel composition component
+- Add workflow tab to SkillEditor
+- Add detached workflow pop-out page
+- Add workflow route to app router
+- Add workflow YAML sync utilities
+- Add toolbox palette with drag-and-drop
+- Add editable step inspector panel
+- Add editable workflow canvas
+- Add visual designer composition layer
+- Add Code/Visual/Test mode toggle
+- Add generalized useTextZoom hook with container props
+- Add useContainerWidth hook for responsive layout
+- Add workflow keyboard shortcuts hook
+- Update workflow pop-out window to 1200x800
+- Add execution history and last arguments to workflow store
+- Add workflow execution animations and text zoom CSS
+- Add execution animations and custom memo comparator to StepNode
+- Add edge dash-flow animation for active workflow edges
+- Add execution history, error recovery, and dimmed history cards
+- Add workflow empty state with template insertion
+- Add empty canvas hint for visual designer
+- Add responsive layout with container width breakpoints
+- Enhance detached workflow with mode toggle and execution sync
+- Add workflow badge and quick-open button to skill list
+- Add executable badge to registry node in topology graph
+- Add VaultDir helper to state package
+- Add vault secret type definition
+- Add vault store with CRUD and atomic writes
+- Add unified expansion with vault resolution
+- Add vault value redaction to log handler
+- Load vault and wire into deploy pipeline
+- Pass vault to gateway for redaction and API
+- Add vault store and routes to API server
+- Add vault REST API endpoints
+- Add vault CLI commands
+- Register vault command in CLI
+- Add variable set types to vault package
+- Add variable set operations to vault store
+- Add VaultSetLookup interface for set injection
+- Add Secrets config type for variable sets
+- Inject variable set secrets into container env
+- Wire vault set injection into deploy flow
+- Add vault set REST API endpoints
+- Add vault sets CLI commands and --set flag
+- Add vault API client functions
+- Add vault Zustand store
+- Add vault management slide-over panel
+- Wire settings button to vault panel
+- Add encrypted vault types for envelope encryption
+- Add XChaCha20-Poly1305 envelope encryption
+- Integrate encryption into vault store
+- Add vault lock, unlock, and change-passphrase CLI commands
+- Add HTTP 423 Locked status constant
+- Add vault status, lock, and unlock API endpoints
+- Add vault encryption API client functions
+- Add lock state management to vault store
+- Add vault passphrase unlock prompt component
+- Integrate lock/unlock flow into vault panel
+- Add skills fields to GatewayNodeData and remove RegistryNodeData
+- Pass registry status to gateway node data
+- Add skills stat row with monochromatic icon style
+- Add embedded prop to RegistrySidebar
+- Add GatewaySidebar with embedded registry
+- Wire GatewaySidebar into sidebar dispatch
+- Add search filtering to registry sidebar
+- Add NeedsDocker and IsContainerBased predicates to config
+- Defer Ping and EnsureNetwork behind NeedsDocker guard
+- Skip Docker status query for non-container stacks
+- Graceful destroy when Docker is unavailable
+- Show gateway status when Docker is unavailable
+- Add compact height constants for all node types
+- Add compact option to layout types
+- Support compact dimensions in getNodeDimensions
+- Pass compact state through butterfly layout engine
+- Thread compact option through transform pipeline
+- Add compactCards toggle to UI store
+- Read compact state when calculating layout
+- Add compact rendering to CustomNode
+- Add compact rendering to AgentNode
+- Add compact rendering to ClientNode
+- Add compact cards toggle button to canvas toolbar
+- Add runtime detection module for Docker and Podman
+- Add NewWithInfo factory for runtime-aware orchestrator creation
+- Add runtime-aware host alias and error messages to orchestrator
+- Add NewDockerClientWithHost for explicit socket selection
+- Add runtime info support to DockerRuntime driver
+- Add runtime-aware host alias and SELinux volume labels
+- Register runtime-aware orchestrator factory
+- Add runtime detection and selection to controller
+- Use runtime-aware host alias in reload handler
+- Add --runtime persistent flag for runtime selection
+- Pass runtime flag from deploy command to controller
+- Add gridctl info subcommand for runtime diagnostics
+- Print runtime info and rootless warning at deploy startup
+- Add individual MCP server restart API and UI
+
+### Refactoring
+
+
+- Migrate useLogFontSize to delegate to useTextZoom
+- Migrate useWorkflowFontSize to delegate to useTextZoom
+- Integrate workflow keyboard shortcuts hook
+- Use unified expansion in stack loader
+- Replace popup window configs with simple tab-based navigation
+- Simplify PopoutButton using IconButton component
+- Remove redundant tooltip prop from PopoutButton usage
+- Remove redundant tooltip prop from sidebar PopoutButton
+- Remove redundant tooltip prop from registry PopoutButton
+- Remove gateway-to-registry edge
+- Remove registry status from edge creation
+- Remove gateway-to-registry edge relation type
+- Remove registry exports from graph index
+- Remove registry zone assignment from layout
+- Remove registry dimensions from layout utils
+- Remove registry node type and layout constants
+- Remove standalone RegistryNode component
+- Remove registry from node type registry
+- Rename NeedsDocker to NeedsContainerRuntime
+- Replace Docker-specific strings with runtime-agnostic text
+- Use runtime-agnostic error messages in destroy
+- Use runtime-agnostic error message in status## [0.1.0-alpha.11] - 2026-02-27
+
+
+### Bug Fixes
+
+
 - Update stale unlink command help text
 - Reject HTML responses and warn on OpenAPI 3.1 compat errors
 - Check w.Write return values in tests
 
 ### Features
 
-- Add individual MCP server restart API and UI control
+
 - Add OpenCode provisioner for link/unlink
 - Register OpenCode in provisioner registry
 - Add OpenCode case to simulateLink
