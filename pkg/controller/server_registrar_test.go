@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/gridctl/gridctl/pkg/config"
@@ -366,5 +368,189 @@ func TestServerRegistrar_BuildOpenAPIConfig_WithHeaderAuth(t *testing.T) {
 	}
 	if cfg.OpenAPIConfig.AuthValue != "my-api-key" {
 		t.Errorf("expected auth value 'my-api-key', got '%s'", cfg.OpenAPIConfig.AuthValue)
+	}
+}
+
+func TestServerRegistrar_SetLogger(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+	// Should not panic with nil
+	r.SetLogger(nil)
+	// Should not panic with valid logger
+	r.SetLogger(slog.Default())
+}
+
+func TestServerRegistrar_BuildConfigFromMCPServer_Stdio(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+
+	server := config.MCPServer{
+		Name:      "stdio-server",
+		Image:     "my-image:latest",
+		Transport: "stdio",
+		Tools:     []string{"exec"},
+	}
+
+	cfg := r.buildConfigFromMCPServer(server, 0, "/path/stack.yaml")
+
+	if cfg.Transport != mcp.TransportStdio {
+		t.Errorf("expected transport stdio, got '%s'", cfg.Transport)
+	}
+	// Stdio containers don't get a container ID from this path
+	if cfg.ContainerID != "" {
+		t.Errorf("expected empty container ID, got '%s'", cfg.ContainerID)
+	}
+}
+
+func TestServerRegistrar_BuildConfigFromMCPServer_OpenAPI(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), true) // noExpand=true
+
+	server := config.MCPServer{
+		Name: "api-server",
+		OpenAPI: &config.OpenAPIConfig{
+			Spec:    "https://api.example.com/openapi.json",
+			BaseURL: "https://api.example.com",
+		},
+		Tools: []string{"getUser"},
+	}
+
+	cfg := r.buildConfigFromMCPServer(server, 0, "/path/stack.yaml")
+
+	if !cfg.OpenAPI {
+		t.Error("expected OpenAPI to be true")
+	}
+	if cfg.OpenAPIConfig == nil {
+		t.Fatal("expected non-nil OpenAPIConfig")
+	}
+	if cfg.OpenAPIConfig.Spec != "https://api.example.com/openapi.json" {
+		t.Errorf("unexpected spec: %s", cfg.OpenAPIConfig.Spec)
+	}
+	if !cfg.OpenAPIConfig.NoExpand {
+		t.Error("expected NoExpand to be true")
+	}
+}
+
+func TestServerRegistrar_BuildOpenAPIConfig_NoAuth(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+
+	openAPICfg := &config.OpenAPIConfig{
+		Spec: "/path/to/spec.json",
+	}
+
+	cfg := r.buildOpenAPIConfig("simple-api", openAPICfg, nil)
+
+	if !cfg.OpenAPI {
+		t.Error("expected OpenAPI to be true")
+	}
+	if cfg.OpenAPIConfig.AuthType != "" {
+		t.Errorf("expected empty auth type, got '%s'", cfg.OpenAPIConfig.AuthType)
+	}
+}
+
+func TestServerRegistrar_BuildOpenAPIConfig_NoOperations(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+
+	openAPICfg := &config.OpenAPIConfig{
+		Spec: "/spec.json",
+	}
+
+	cfg := r.buildOpenAPIConfig("api", openAPICfg, nil)
+
+	if cfg.OpenAPIConfig.Include != nil {
+		t.Error("expected nil Include")
+	}
+	if cfg.OpenAPIConfig.Exclude != nil {
+		t.Error("expected nil Exclude")
+	}
+}
+
+func TestServerRegistrar_BuildServerConfig_SSE(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+
+	server := runtime.MCPServerResult{
+		Name:       "sse-server",
+		WorkloadID: runtime.WorkloadID("container789"),
+		HostPort:   9002,
+	}
+	serverCfg := config.MCPServer{
+		Name:      "sse-server",
+		Transport: "sse",
+	}
+
+	cfg := r.buildServerConfig(server, serverCfg, "/path/to/stack.yaml")
+
+	if cfg.Transport != mcp.TransportSSE {
+		t.Errorf("expected transport SSE, got '%s'", cfg.Transport)
+	}
+	if cfg.Endpoint != "http://localhost:9002/mcp" {
+		t.Errorf("expected endpoint 'http://localhost:9002/mcp', got '%s'", cfg.Endpoint)
+	}
+}
+
+func TestServerRegistrar_BuildConfigFromMCPServer_SSE(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+
+	server := config.MCPServer{
+		Name:      "sse-ext",
+		URL:       "https://example.com/events",
+		Transport: "sse",
+	}
+
+	cfg := r.buildConfigFromMCPServer(server, 0, "/path/stack.yaml")
+
+	if !cfg.External {
+		t.Error("expected External to be true")
+	}
+	if cfg.Transport != mcp.TransportSSE {
+		t.Errorf("expected transport SSE, got '%s'", cfg.Transport)
+	}
+}
+
+func TestServerRegistrar_RegisterAll_WithExternalServer(t *testing.T) {
+	gw := mcp.NewGateway()
+	r := NewServerRegistrar(gw, false)
+	r.SetLogger(slog.Default())
+
+	stack := &config.Stack{
+		MCPServers: []config.MCPServer{
+			{
+				Name: "ext-server",
+				URL:  "http://127.0.0.1:1/nonexistent",
+			},
+		},
+	}
+	result := &runtime.UpResult{
+		MCPServers: []runtime.MCPServerResult{
+			{
+				Name:     "ext-server",
+				External: true,
+				URL:      "http://127.0.0.1:1/nonexistent",
+			},
+		},
+	}
+
+	// Use a cancelled context so the RegisterMCPServer call fails fast
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Should not panic — logs warning on failure
+	r.RegisterAll(ctx, result, stack, "/path/stack.yaml")
+}
+
+func TestServerRegistrar_RegisterOne_External(t *testing.T) {
+	gw := mcp.NewGateway()
+	r := NewServerRegistrar(gw, false)
+	r.SetLogger(slog.Default())
+
+	server := config.MCPServer{
+		Name: "ext",
+		URL:  "http://127.0.0.1:1/nonexistent",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Will fail to connect but exercises the code path
+	err := r.RegisterOne(ctx, server, 0, "/path/stack.yaml")
+	if err == nil {
+		t.Error("expected error for unreachable server")
 	}
 }
