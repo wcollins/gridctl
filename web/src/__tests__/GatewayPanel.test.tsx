@@ -55,6 +55,16 @@ function makeGatewayData(overrides: Partial<GatewayNodeData> = {}): GatewayNodeD
     version: 'v0.1.0-beta.1',
     status: 'running',
     serverCount: 3,
+    resourceCount: 0,
+    agentCount: 0,
+    a2aAgentCount: 0,
+    clientCount: 0,
+    totalToolCount: 0,
+    sessions: 0,
+    a2aTasks: null,
+    codeMode: null,
+    totalSkills: 0,
+    activeSkills: 0,
     ...overrides,
   };
 }
@@ -73,7 +83,7 @@ describe('GatewaySidebar', () => {
   });
 
   it('shows fallback name when no node selected', () => {
-    vi.mocked(useSelectedNodeData).mockReturnValue(null);
+    vi.mocked(useSelectedNodeData).mockReturnValue(undefined);
     render(<GatewaySidebar onClose={vi.fn()} />);
     expect(screen.getByText('Gateway')).toBeInTheDocument();
   });
