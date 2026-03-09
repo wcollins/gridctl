@@ -1,0 +1,100 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom';
+
+vi.mock('@xyflow/react', () => ({
+  Handle: ({ id }: { id: string }) => <div data-testid={`handle-${id}`} />,
+  Position: { Left: 'left', Right: 'right' },
+}));
+
+import CustomNode from '../components/graph/CustomNode';
+import type { MCPServerNodeData, ResourceNodeData } from '../types';
+
+function makeServerData(overrides: Partial<MCPServerNodeData> = {}): MCPServerNodeData {
+  return {
+    type: 'mcp-server',
+    name: 'test-server',
+    transport: 'http',
+    initialized: true,
+    toolCount: 3,
+    tools: ['tool1', 'tool2', 'tool3'],
+    status: 'running',
+    ...overrides,
+  };
+}
+
+describe('CustomNode', () => {
+  it('renders node with correct label', () => {
+    render(<CustomNode data={makeServerData({ name: 'my-server' })} />);
+    expect(screen.getByText('my-server')).toBeInTheDocument();
+  });
+
+  it('shows running status indicator', () => {
+    render(<CustomNode data={makeServerData({ status: 'running' })} />);
+    expect(screen.getByText('running')).toBeInTheDocument();
+  });
+
+  it('shows stopped status indicator', () => {
+    render(<CustomNode data={makeServerData({ status: 'stopped' })} />);
+    expect(screen.getByText('stopped')).toBeInTheDocument();
+  });
+
+  it('shows error status indicator', () => {
+    render(<CustomNode data={makeServerData({ status: 'error' })} />);
+    expect(screen.getByText('error')).toBeInTheDocument();
+  });
+
+  it('renders mcp-server type with Container badge', () => {
+    render(<CustomNode data={makeServerData()} />);
+    expect(screen.getByText('Container')).toBeInTheDocument();
+  });
+
+  it('renders external server with External badge', () => {
+    render(<CustomNode data={makeServerData({ external: true })} />);
+    expect(screen.getByText('External')).toBeInTheDocument();
+    expect(screen.queryByText('Container')).not.toBeInTheDocument();
+  });
+
+  it('renders local process with Local badge', () => {
+    render(<CustomNode data={makeServerData({ localProcess: true })} />);
+    expect(screen.getByText('Local')).toBeInTheDocument();
+  });
+
+  it('renders SSH server with SSH badge', () => {
+    render(<CustomNode data={makeServerData({ ssh: true })} />);
+    expect(screen.getByText('SSH')).toBeInTheDocument();
+  });
+
+  it('renders OpenAPI server with OpenAPI badge', () => {
+    render(<CustomNode data={makeServerData({ openapi: true })} />);
+    expect(screen.getByText('OpenAPI')).toBeInTheDocument();
+  });
+
+  it('renders resource node with image', () => {
+    const data: ResourceNodeData = {
+      type: 'resource',
+      name: 'postgres',
+      image: 'postgres:16',
+      status: 'running',
+    };
+    render(<CustomNode data={data} />);
+    expect(screen.getByText('postgres')).toBeInTheDocument();
+    expect(screen.getByText('postgres:16')).toBeInTheDocument();
+  });
+
+  it('displays tool count for servers', () => {
+    render(<CustomNode data={makeServerData({ toolCount: 5 })} />);
+    expect(screen.getByText('5 tools')).toBeInTheDocument();
+  });
+
+  it('displays transport type', () => {
+    render(<CustomNode data={makeServerData({ transport: 'stdio' })} />);
+    expect(screen.getByText('stdio')).toBeInTheDocument();
+  });
+
+  it('renders connection handles', () => {
+    render(<CustomNode data={makeServerData()} />);
+    expect(screen.getByTestId('handle-input')).toBeInTheDocument();
+    expect(screen.getByTestId('handle-output')).toBeInTheDocument();
+  });
+});
