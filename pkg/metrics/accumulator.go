@@ -85,6 +85,10 @@ type Accumulator struct {
 	// Per-server ring buffers
 	serverBufMu sync.RWMutex
 	serverBufs  map[string]*serverBuffer
+
+	// Format savings (atomic for lock-free reads)
+	savingsOriginal  atomic.Int64
+	savingsFormatted atomic.Int64
 }
 
 // serverBuffer is a per-server ring buffer of minute buckets.
@@ -139,6 +143,14 @@ func (a *Accumulator) Record(serverName string, inputTokens, outputTokens int) {
 	now := bucketKey(time.Now())
 	a.addToBucket(now, input, output)
 	a.addToServerBucket(serverName, now, input, output)
+}
+
+// RecordFormatSavings records token counts before and after format conversion.
+// Normal token usage tracking is handled separately by the ToolCallObserver;
+// this method only tracks the format savings delta.
+func (a *Accumulator) RecordFormatSavings(serverName string, originalTokens, formattedTokens int) {
+	a.savingsOriginal.Add(int64(originalTokens))
+	a.savingsFormatted.Add(int64(formattedTokens))
 }
 
 // addToBucket adds tokens to the aggregate ring buffer for the given minute.
@@ -239,14 +251,28 @@ func (a *Accumulator) Snapshot() TokenUsage {
 	}
 	a.serverMu.RUnlock()
 
+	// Compute format savings
+	origTokens := a.savingsOriginal.Load()
+	fmtTokens := a.savingsFormatted.Load()
+	savedTokens := origTokens - fmtTokens
+	var savingsPct float64
+	if origTokens > 0 {
+		savingsPct = float64(savedTokens) / float64(origTokens) * 100
+	}
+
 	return TokenUsage{
 		Session: TokenCounts{
 			InputTokens:  input,
 			OutputTokens: output,
 			TotalTokens:  input + output,
 		},
-		PerServer:     perServer,
-		FormatSavings: FormatSavings{}, // Zero until formatting backend is implemented
+		PerServer: perServer,
+		FormatSavings: FormatSavings{
+			OriginalTokens:  origTokens,
+			FormattedTokens: fmtTokens,
+			SavedTokens:     savedTokens,
+			SavingsPercent:  savingsPct,
+		},
 	}
 }
 
@@ -388,6 +414,9 @@ func (a *Accumulator) Clear() {
 	a.serverBufMu.Lock()
 	a.serverBufs = make(map[string]*serverBuffer)
 	a.serverBufMu.Unlock()
+
+	a.savingsOriginal.Store(0)
+	a.savingsFormatted.Store(0)
 }
 
 // formatRange returns a human-readable range string for a duration.

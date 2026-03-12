@@ -11,6 +11,7 @@ import (
 
 	"github.com/gridctl/gridctl/pkg/config"
 	"github.com/gridctl/gridctl/pkg/logging"
+	"github.com/gridctl/gridctl/pkg/token"
 	"go.uber.org/mock/gomock"
 )
 
@@ -2698,6 +2699,393 @@ func TestCodeMode_HandleSearch_NoQuery(t *testing.T) {
 	}
 	if !strings.Contains(result.Content[0].Text, "Found 2 tool(s)") {
 		t.Errorf("expected all tools returned, got: %s", result.Content[0].Text)
+	}
+}
+
+// --- Format Conversion Tests ---
+
+func TestGateway_ResolveOutputFormat(t *testing.T) {
+	g := NewGateway()
+
+	// Default: no config → json
+	if got := g.resolveOutputFormat("server1"); got != "json" {
+		t.Errorf("default = %q, want %q", got, "json")
+	}
+
+	// Gateway default set
+	g.SetDefaultOutputFormat("toon")
+	if got := g.resolveOutputFormat("server1"); got != "toon" {
+		t.Errorf("with gateway default = %q, want %q", got, "toon")
+	}
+
+	// Server override takes precedence
+	g.SetServerMeta(MCPServerConfig{Name: "server1", OutputFormat: "csv"})
+	if got := g.resolveOutputFormat("server1"); got != "csv" {
+		t.Errorf("with server override = %q, want %q", got, "csv")
+	}
+
+	// Other servers still use gateway default
+	if got := g.resolveOutputFormat("server2"); got != "toon" {
+		t.Errorf("other server = %q, want %q", got, "toon")
+	}
+
+	// Server with empty format uses gateway default
+	g.SetServerMeta(MCPServerConfig{Name: "server3", OutputFormat: ""})
+	if got := g.resolveOutputFormat("server3"); got != "toon" {
+		t.Errorf("empty server format = %q, want %q", got, "toon")
+	}
+}
+
+func TestGateway_HandleToolsCall_FormatConversion_TOON(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetDefaultOutputFormat("toon")
+	g.SetTokenCounter(token.NewHeuristicCounter(4))
+	ctx := context.Background()
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "fetch", Description: "Fetch data"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, name string, args map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{
+				Content: []Content{NewTextContent(`{"name":"John","age":30,"active":true}`)},
+			}, nil
+		},
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__fetch",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("expected success")
+	}
+
+	text := result.Content[0].Text
+	// TOON output should contain key-value pairs (not JSON braces)
+	if strings.Contains(text, "{") {
+		t.Errorf("expected TOON format (no braces), got: %s", text)
+	}
+	if !strings.Contains(text, "name: John") {
+		t.Errorf("expected 'name: John' in TOON output, got: %s", text)
+	}
+	if !strings.Contains(text, "age: 30") {
+		t.Errorf("expected 'age: 30' in TOON output, got: %s", text)
+	}
+}
+
+func TestGateway_HandleToolsCall_FormatConversion_CSV(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetTokenCounter(token.NewHeuristicCounter(4))
+	ctx := context.Background()
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "list", Description: "List items"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, name string, args map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{
+				Content: []Content{NewTextContent(`[{"name":"Alice","age":25},{"name":"Bob","age":30}]`)},
+			}, nil
+		},
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1", OutputFormat: "csv"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__list",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	text := result.Content[0].Text
+	// CSV should have header row with sorted keys
+	if !strings.Contains(text, "age,name") {
+		t.Errorf("expected CSV header 'age,name', got: %s", text)
+	}
+	if !strings.Contains(text, "25,Alice") {
+		t.Errorf("expected CSV row '25,Alice', got: %s", text)
+	}
+}
+
+func TestGateway_HandleToolsCall_FormatConversion_NonJSON(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetDefaultOutputFormat("toon")
+	ctx := context.Background()
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "say", Description: "Say something"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, name string, args map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{
+				Content: []Content{NewTextContent("Hello, this is plain text")},
+			}, nil
+		},
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__say",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Non-JSON text should pass through unchanged
+	if result.Content[0].Text != "Hello, this is plain text" {
+		t.Errorf("expected unchanged text, got: %s", result.Content[0].Text)
+	}
+}
+
+func TestGateway_HandleToolsCall_FormatConversion_LargePayload(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetDefaultOutputFormat("toon")
+	g.SetLogger(logging.NewDiscardLogger())
+	ctx := context.Background()
+
+	// Create a payload > 1MB
+	largeJSON := `{"data":"` + strings.Repeat("x", maxFormatPayloadSize+1) + `"}`
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "big", Description: "Big response"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, name string, args map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{
+				Content: []Content{NewTextContent(largeJSON)},
+			}, nil
+		},
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__big",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Large payload should be left unchanged
+	if result.Content[0].Text != largeJSON {
+		t.Error("expected large payload to be left unchanged")
+	}
+}
+
+func TestGateway_HandleToolsCall_FormatConversion_ServerOverride(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetDefaultOutputFormat("toon")
+	g.SetTokenCounter(token.NewHeuristicCounter(4))
+	ctx := context.Background()
+
+	jsonContent := `{"key":"value"}`
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "get", Description: "Get data"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, name string, args map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{
+				Content: []Content{NewTextContent(jsonContent)},
+			}, nil
+		},
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+
+	// Server overrides to json — should skip conversion
+	g.SetServerMeta(MCPServerConfig{Name: "server1", OutputFormat: "json"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__get",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// JSON override: content unchanged
+	if result.Content[0].Text != jsonContent {
+		t.Errorf("expected JSON passthrough, got: %s", result.Content[0].Text)
+	}
+}
+
+func TestGateway_HandleToolsCall_FormatConversion_ErrorResult(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetDefaultOutputFormat("toon")
+	ctx := context.Background()
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "fail", Description: "Failing tool"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, name string, args map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{
+				Content: []Content{NewTextContent(`{"error":"something broke"}`)},
+				IsError: true,
+			}, nil
+		},
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__fail",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Error results should not be format-converted
+	if !result.IsError {
+		t.Error("expected error result")
+	}
+	if result.Content[0].Text != `{"error":"something broke"}` {
+		t.Errorf("expected unchanged error content, got: %s", result.Content[0].Text)
+	}
+}
+
+// mockFormatSavingsRecorder captures RecordWithSavings calls for testing.
+type mockFormatSavingsRecorder struct {
+	calls []formatSavingsCall
+}
+
+type formatSavingsCall struct {
+	serverName      string
+	originalTokens  int
+	formattedTokens int
+}
+
+func (m *mockFormatSavingsRecorder) RecordFormatSavings(serverName string, originalTokens, formattedTokens int) {
+	m.calls = append(m.calls, formatSavingsCall{serverName: serverName, originalTokens: originalTokens, formattedTokens: formattedTokens})
+}
+
+func TestGateway_HandleToolsCall_FormatConversion_RecordsSavings(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetDefaultOutputFormat("toon")
+	counter := token.NewHeuristicCounter(4)
+	g.SetTokenCounter(counter)
+	recorder := &mockFormatSavingsRecorder{}
+	g.SetFormatSavingsRecorder(recorder)
+	ctx := context.Background()
+
+	jsonContent := `{"name":"John Doe","email":"john@example.com","active":true,"count":42}`
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "get", Description: "Get user"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, name string, args map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{
+				Content: []Content{NewTextContent(jsonContent)},
+			}, nil
+		},
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1"})
+
+	_, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__get",
+		Arguments: map[string]any{"id": "123"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(recorder.calls) != 1 {
+		t.Fatalf("expected 1 RecordWithSavings call, got %d", len(recorder.calls))
+	}
+
+	call := recorder.calls[0]
+	if call.serverName != "server1" {
+		t.Errorf("serverName = %q, want %q", call.serverName, "server1")
+	}
+	if call.originalTokens <= 0 {
+		t.Error("expected positive originalTokens")
+	}
+	if call.formattedTokens <= 0 {
+		t.Error("expected positive formattedTokens")
+	}
+	// TOON is typically shorter than JSON
+	if call.originalTokens <= call.formattedTokens {
+		t.Errorf("expected originalTokens (%d) > formattedTokens (%d) for TOON conversion",
+			call.originalTokens, call.formattedTokens)
+	}
+}
+
+func TestGateway_SetDefaultOutputFormat(t *testing.T) {
+	g := NewGateway()
+
+	g.SetDefaultOutputFormat("toon")
+	if got := g.resolveOutputFormat("any-server"); got != "toon" {
+		t.Errorf("after SetDefaultOutputFormat = %q, want %q", got, "toon")
+	}
+
+	g.SetDefaultOutputFormat("")
+	if got := g.resolveOutputFormat("any-server"); got != "json" {
+		t.Errorf("empty format = %q, want %q", got, "json")
+	}
+}
+
+func TestGateway_HandleToolsCall_FormatConversion_CSVNonTabular(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetLogger(logging.NewDiscardLogger())
+	ctx := context.Background()
+
+	// Non-tabular JSON (object, not array) should fail CSV and leave unchanged
+	jsonContent := `{"key":"value","nested":{"a":1}}`
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "get", Description: "Get data"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, name string, args map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{
+				Content: []Content{NewTextContent(jsonContent)},
+			}, nil
+		},
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1", OutputFormat: "csv"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__get",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// CSV conversion should fail for non-tabular data, leaving content unchanged
+	if result.Content[0].Text != jsonContent {
+		t.Errorf("expected unchanged content on CSV failure, got: %s", result.Content[0].Text)
 	}
 }
 
