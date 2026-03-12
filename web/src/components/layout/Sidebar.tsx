@@ -19,6 +19,7 @@ import {
   HeartPulse,
   Monitor,
   Gauge,
+  FileOutput,
 } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { Badge } from '../ui/Badge';
@@ -242,6 +243,16 @@ export function Sidebar() {
                   </div>
                 );
               })()}
+
+            {isServer && serverData?.outputFormat && serverData.outputFormat !== 'json' && (
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-text-muted">Format</span>
+                <span className="text-xs px-2 py-0.5 rounded-md font-mono font-medium uppercase tracking-wider flex items-center gap-1 bg-secondary/10 text-secondary">
+                  <FileOutput size={10} />
+                  {serverData.outputFormat}
+                </span>
+              </div>
+            )}
 
             {isServer && (data as MCPServerNodeData).endpoint && (
               <div className="flex justify-between items-center gap-4">
