@@ -485,6 +485,83 @@ func TestServerRegistrar_BuildServerConfig_SSE(t *testing.T) {
 	}
 }
 
+func TestServerRegistrar_BuildServerConfig_OutputFormat(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+
+	server := runtime.MCPServerResult{
+		Name:     "ext-server",
+		External: true,
+		URL:      "https://api.example.com/mcp",
+	}
+	serverCfg := config.MCPServer{
+		Name:         "ext-server",
+		Transport:    "http",
+		OutputFormat: "toon",
+	}
+
+	cfg := r.buildServerConfig(server, serverCfg, "/path/to/stack.yaml")
+
+	if cfg.OutputFormat != "toon" {
+		t.Errorf("expected OutputFormat 'toon', got '%s'", cfg.OutputFormat)
+	}
+}
+
+func TestServerRegistrar_BuildConfigFromMCPServer_OutputFormat(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+
+	server := config.MCPServer{
+		Name:         "ext",
+		URL:          "https://example.com/mcp",
+		OutputFormat: "csv",
+	}
+
+	cfg := r.buildConfigFromMCPServer(server, 0, "/path/stack.yaml")
+
+	if cfg.OutputFormat != "csv" {
+		t.Errorf("expected OutputFormat 'csv', got '%s'", cfg.OutputFormat)
+	}
+}
+
+func TestServerRegistrar_BuildServerConfig_OutputFormat_AllTransports(t *testing.T) {
+	r := NewServerRegistrar(mcp.NewGateway(), false)
+
+	tests := []struct {
+		name   string
+		server runtime.MCPServerResult
+		cfg    config.MCPServer
+	}{
+		{
+			"local-process",
+			runtime.MCPServerResult{Name: "local", LocalProcess: true, Command: []string{"./server"}},
+			config.MCPServer{Name: "local", Command: []string{"./server"}, OutputFormat: "toon"},
+		},
+		{
+			"ssh",
+			runtime.MCPServerResult{Name: "ssh", SSH: true, Command: []string{"/opt/server"}, SSHHost: "host", SSHUser: "user"},
+			config.MCPServer{Name: "ssh", OutputFormat: "csv"},
+		},
+		{
+			"stdio",
+			runtime.MCPServerResult{Name: "stdio", WorkloadID: runtime.WorkloadID("c1")},
+			config.MCPServer{Name: "stdio", Transport: "stdio", OutputFormat: "toon"},
+		},
+		{
+			"http",
+			runtime.MCPServerResult{Name: "http", HostPort: 9001},
+			config.MCPServer{Name: "http", Transport: "http", OutputFormat: "csv"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := r.buildServerConfig(tt.server, tt.cfg, "/path/stack.yaml")
+			if cfg.OutputFormat != tt.cfg.OutputFormat {
+				t.Errorf("expected OutputFormat '%s', got '%s'", tt.cfg.OutputFormat, cfg.OutputFormat)
+			}
+		})
+	}
+}
+
 func TestServerRegistrar_BuildConfigFromMCPServer_SSE(t *testing.T) {
 	r := NewServerRegistrar(mcp.NewGateway(), false)
 
