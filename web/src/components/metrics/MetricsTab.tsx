@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { IconButton } from '../ui/IconButton';
+import { PopoutButton } from '../ui/PopoutButton';
 import { useUIStore } from '../../stores/useUIStore';
 import { useStackStore } from '../../stores/useStackStore';
 import { fetchTokenMetrics, clearTokenMetrics } from '../../lib/api';
+import { useWindowManager } from '../../hooks/useWindowManager';
 import { formatCompactNumber } from '../../lib/format';
 import { POLLING } from '../../lib/constants';
 import { AreaChart } from '../chart/AreaChart';
@@ -36,6 +38,8 @@ export function MetricsTab() {
   const bottomPanelOpen = useUIStore((s) => s.bottomPanelOpen);
   const bottomPanelTab = useUIStore((s) => s.bottomPanelTab);
   const tokenUsage = useStackStore((s) => s.tokenUsage);
+  const metricsDetached = useUIStore((s) => s.metricsDetached);
+  const { openDetachedWindow } = useWindowManager();
   const [timeRange, setTimeRange] = useState<TimeRange>('live');
   const [isPaused, setIsPaused] = useState(false);
   const [metricsData, setMetricsData] = useState<TokenMetricsResponse | null>(null);
@@ -238,6 +242,11 @@ export function MetricsTab() {
             )}
           </div>
 
+          <div className="w-px h-4 bg-border/50 mx-0.5" />
+          <PopoutButton
+            onClick={() => openDetachedWindow('metrics')}
+            disabled={metricsDetached}
+          />
         </div>
       </div>
 
