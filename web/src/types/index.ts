@@ -32,6 +32,7 @@ export interface MCPServerStatus {
   healthError?: string; // Error message if unhealthy
   openapi?: boolean; // True for OpenAPI-backed servers
   openapiSpec?: string; // OpenAPI spec URL or file path
+  outputFormat?: string; // Configured output format (e.g. "toon", "csv")
 }
 
 // Resource status for non-MCP containers
@@ -190,6 +191,7 @@ export interface MCPServerNodeData extends NodeDataBase {
   healthError?: string; // Error message if unhealthy
   openapi?: boolean; // True for OpenAPI-backed servers
   openapiSpec?: string; // OpenAPI spec URL or file path
+  outputFormat?: string; // Configured output format (e.g. "toon", "csv")
 }
 
 export interface ResourceNodeData extends NodeDataBase {
