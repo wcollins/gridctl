@@ -70,11 +70,12 @@ func (r *ServerRegistrar) buildServerConfig(server runtime.MCPServerResult, serv
 
 	if server.External {
 		return mcp.MCPServerConfig{
-			Name:      server.Name,
-			Transport: transport,
-			Endpoint:  server.URL,
-			External:  true,
-			Tools:     serverCfg.Tools,
+			Name:         server.Name,
+			Transport:    transport,
+			Endpoint:     server.URL,
+			External:     true,
+			Tools:        serverCfg.Tools,
+			OutputFormat: serverCfg.OutputFormat,
 		}
 	}
 	if server.LocalProcess {
@@ -85,6 +86,7 @@ func (r *ServerRegistrar) buildServerConfig(server runtime.MCPServerResult, serv
 			WorkDir:      filepath.Dir(stackPath),
 			Env:          serverCfg.Env,
 			Tools:        serverCfg.Tools,
+			OutputFormat: serverCfg.OutputFormat,
 		}
 	}
 	if server.SSH {
@@ -98,25 +100,30 @@ func (r *ServerRegistrar) buildServerConfig(server runtime.MCPServerResult, serv
 			SSHIdentityFile: server.SSHIdentityFile,
 			Env:             serverCfg.Env,
 			Tools:           serverCfg.Tools,
+			OutputFormat:    serverCfg.OutputFormat,
 		}
 	}
 	if server.OpenAPI {
-		return r.buildOpenAPIConfig(server.Name, server.OpenAPIConfig, serverCfg.Tools)
+		cfg := r.buildOpenAPIConfig(server.Name, server.OpenAPIConfig, serverCfg.Tools)
+		cfg.OutputFormat = serverCfg.OutputFormat
+		return cfg
 	}
 	if transport == mcp.TransportStdio {
 		return mcp.MCPServerConfig{
-			Name:        server.Name,
-			Transport:   transport,
-			ContainerID: string(server.WorkloadID),
-			Tools:       serverCfg.Tools,
+			Name:         server.Name,
+			Transport:    transport,
+			ContainerID:  string(server.WorkloadID),
+			Tools:        serverCfg.Tools,
+			OutputFormat: serverCfg.OutputFormat,
 		}
 	}
 	// Container HTTP/SSE
 	return mcp.MCPServerConfig{
-		Name:      server.Name,
-		Transport: transport,
-		Endpoint:  fmt.Sprintf("http://localhost:%d/mcp", server.HostPort),
-		Tools:     serverCfg.Tools,
+		Name:         server.Name,
+		Transport:    transport,
+		Endpoint:     fmt.Sprintf("http://localhost:%d/mcp", server.HostPort),
+		Tools:        serverCfg.Tools,
+		OutputFormat: serverCfg.OutputFormat,
 	}
 }
 
@@ -127,11 +134,12 @@ func (r *ServerRegistrar) buildConfigFromMCPServer(server config.MCPServer, host
 
 	if server.IsExternal() {
 		return mcp.MCPServerConfig{
-			Name:      server.Name,
-			Transport: transport,
-			Endpoint:  server.URL,
-			External:  true,
-			Tools:     server.Tools,
+			Name:         server.Name,
+			Transport:    transport,
+			Endpoint:     server.URL,
+			External:     true,
+			Tools:        server.Tools,
+			OutputFormat: server.OutputFormat,
 		}
 	}
 	if server.IsLocalProcess() {
@@ -142,6 +150,7 @@ func (r *ServerRegistrar) buildConfigFromMCPServer(server config.MCPServer, host
 			WorkDir:      filepath.Dir(stackPath),
 			Env:          server.Env,
 			Tools:        server.Tools,
+			OutputFormat: server.OutputFormat,
 		}
 	}
 	if server.IsSSH() {
@@ -155,26 +164,31 @@ func (r *ServerRegistrar) buildConfigFromMCPServer(server config.MCPServer, host
 			SSHIdentityFile: server.SSH.IdentityFile,
 			Env:             server.Env,
 			Tools:           server.Tools,
+			OutputFormat:    server.OutputFormat,
 		}
 	}
 	if server.IsOpenAPI() {
-		return r.buildOpenAPIConfig(server.Name, server.OpenAPI, server.Tools)
+		cfg := r.buildOpenAPIConfig(server.Name, server.OpenAPI, server.Tools)
+		cfg.OutputFormat = server.OutputFormat
+		return cfg
 	}
 	if transport == mcp.TransportStdio {
 		// Stdio containers need container ID which requires full reload
 		// Return a config that will error on registration with a clear message
 		return mcp.MCPServerConfig{
-			Name:      server.Name,
-			Transport: transport,
-			Tools:     server.Tools,
+			Name:         server.Name,
+			Transport:    transport,
+			Tools:        server.Tools,
+			OutputFormat: server.OutputFormat,
 		}
 	}
 	// Container HTTP/SSE
 	return mcp.MCPServerConfig{
-		Name:      server.Name,
-		Transport: transport,
-		Endpoint:  fmt.Sprintf("http://localhost:%d/mcp", hostPort),
-		Tools:     server.Tools,
+		Name:         server.Name,
+		Transport:    transport,
+		Endpoint:     fmt.Sprintf("http://localhost:%d/mcp", hostPort),
+		Tools:        server.Tools,
+		OutputFormat: server.OutputFormat,
 	}
 }
 
