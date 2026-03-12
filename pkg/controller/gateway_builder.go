@@ -130,6 +130,11 @@ func (b *GatewayBuilder) Build(verbose bool) (*GatewayInstance, error) {
 		inst.Gateway.SetCodeMode(timeout)
 	}
 
+	// Phase 1a2: Set default output format if configured
+	if b.stack.Gateway != nil && b.stack.Gateway.OutputFormat != "" {
+		inst.Gateway.SetDefaultOutputFormat(b.stack.Gateway.OutputFormat)
+	}
+
 	// Phase 1b: Create registry server (internal MCP server)
 	regDir := filepath.Join(state.BaseDir(), "registry")
 	if b.registryDir != "" {
@@ -322,6 +327,8 @@ func (b *GatewayBuilder) buildAPIServer(gateway *mcp.Gateway, a2aGateway *a2a.Ga
 	accumulator := metrics.NewAccumulator(10000)
 	observer := metrics.NewObserver(counter, accumulator)
 	gateway.SetToolCallObserver(observer)
+	gateway.SetTokenCounter(counter)
+	gateway.SetFormatSavingsRecorder(accumulator)
 	server.SetMetricsAccumulator(accumulator)
 
 	return server
