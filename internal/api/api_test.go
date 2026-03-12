@@ -290,6 +290,40 @@ func TestHandleMCPServers_WithServer(t *testing.T) {
 	}
 }
 
+func TestHandleMCPServers_IncludesOutputFormat(t *testing.T) {
+	srv := newTestServer(t)
+
+	mock := newMockAgentClient("format-server", []mcp.Tool{
+		{Name: "do-thing", Description: "does a thing"},
+	})
+	srv.gateway.Router().AddClient(mock)
+	srv.gateway.SetServerMeta(mcp.MCPServerConfig{
+		Name:         "format-server",
+		Transport:    mcp.TransportHTTP,
+		OutputFormat: "toon",
+	})
+
+	handler := srv.Handler()
+	req := httptest.NewRequest(http.MethodGet, "/api/mcp-servers", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	var result []MCPServerStatus
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(result) != 1 {
+		t.Fatalf("expected 1 server, got %d", len(result))
+	}
+	if result[0].OutputFormat != "toon" {
+		t.Errorf("output format = %q, want %q", result[0].OutputFormat, "toon")
+	}
+}
+
 func TestHandleMCPServers_MethodNotAllowed(t *testing.T) {
 	srv := newTestServer(t)
 	handler := srv.Handler()
