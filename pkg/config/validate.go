@@ -49,6 +49,14 @@ func Validate(s *Stack) error {
 		}
 	}
 
+	// Gateway output_format validation
+	validOutputFormats := map[string]bool{"json": true, "toon": true, "csv": true, "text": true}
+	if s.Gateway != nil && s.Gateway.OutputFormat != "" {
+		if !validOutputFormats[s.Gateway.OutputFormat] {
+			errs = append(errs, ValidationError{"gateway.output_format", "must be one of: json, toon, csv, text"})
+		}
+	}
+
 	// Gateway auth validation
 	if s.Gateway != nil && s.Gateway.Auth != nil {
 		auth := s.Gateway.Auth
@@ -278,6 +286,11 @@ func Validate(s *Stack) error {
 				}
 			}
 		}
+		// Per-server output_format validation
+		if server.OutputFormat != "" && !validOutputFormats[server.OutputFormat] {
+			errs = append(errs, ValidationError{prefix + ".output_format", "must be one of: json, toon, csv, text"})
+		}
+
 		// In simple mode, server.Network is ignored (per design decision)
 	}
 

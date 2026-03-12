@@ -131,6 +131,122 @@ func TestValidate_GatewayCodeMode(t *testing.T) {
 	}
 }
 
+func TestValidate_GatewayOutputFormat(t *testing.T) {
+	base := func() *Stack {
+		return &Stack{
+			Name:       "test",
+			Network:    Network{Name: "test-net"},
+			MCPServers: []MCPServer{{Name: "s1", Image: "alpine", Port: 3000}},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		stack   *Stack
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid output_format json",
+			stack: func() *Stack {
+				s := base()
+				s.Gateway = &GatewayConfig{OutputFormat: "json"}
+				return s
+			}(),
+		},
+		{
+			name: "valid output_format toon",
+			stack: func() *Stack {
+				s := base()
+				s.Gateway = &GatewayConfig{OutputFormat: "toon"}
+				return s
+			}(),
+		},
+		{
+			name: "valid output_format csv",
+			stack: func() *Stack {
+				s := base()
+				s.Gateway = &GatewayConfig{OutputFormat: "csv"}
+				return s
+			}(),
+		},
+		{
+			name: "valid output_format text",
+			stack: func() *Stack {
+				s := base()
+				s.Gateway = &GatewayConfig{OutputFormat: "text"}
+				return s
+			}(),
+		},
+		{
+			name: "empty output_format is valid",
+			stack: func() *Stack {
+				s := base()
+				s.Gateway = &GatewayConfig{}
+				return s
+			}(),
+		},
+		{
+			name: "invalid output_format value",
+			stack: func() *Stack {
+				s := base()
+				s.Gateway = &GatewayConfig{OutputFormat: "xml"}
+				return s
+			}(),
+			wantErr: true,
+			errMsg:  "gateway.output_format",
+		},
+		{
+			name: "no gateway config is valid",
+			stack: base(),
+		},
+		// Per-server output_format
+		{
+			name: "valid per-server output_format",
+			stack: &Stack{
+				Name:       "test",
+				Network:    Network{Name: "test-net"},
+				MCPServers: []MCPServer{{Name: "s1", Image: "alpine", Port: 3000, OutputFormat: "toon"}},
+			},
+		},
+		{
+			name: "invalid per-server output_format",
+			stack: &Stack{
+				Name:       "test",
+				Network:    Network{Name: "test-net"},
+				MCPServers: []MCPServer{{Name: "s1", Image: "alpine", Port: 3000, OutputFormat: "yaml"}},
+			},
+			wantErr: true,
+			errMsg:  "mcp-servers[0].output_format",
+		},
+		{
+			name: "per-server overrides gateway format",
+			stack: func() *Stack {
+				s := base()
+				s.Gateway = &GatewayConfig{OutputFormat: "toon"}
+				s.MCPServers[0].OutputFormat = "json"
+				return s
+			}(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Validate(tc.stack)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tc.errMsg != "" && !strings.Contains(err.Error(), tc.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tc.errMsg, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidate_GatewayAuth(t *testing.T) {
 	base := func() *Stack {
 		return &Stack{
