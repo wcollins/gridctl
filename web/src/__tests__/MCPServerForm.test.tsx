@@ -8,11 +8,13 @@ function defaultData(overrides?: Partial<MCPServerFormData>): MCPServerFormData 
   return { name: '', serverType: 'container', ...overrides };
 }
 
+const noop = (_data: Partial<MCPServerFormData>) => {};
+
 describe('MCPServerForm', () => {
-  let onChange: ReturnType<typeof vi.fn>;
+  let onChange: typeof noop;
 
   beforeEach(() => {
-    onChange = vi.fn();
+    onChange = vi.fn<typeof noop>();
   });
 
   it('renders all 5 accordion sections', () => {
@@ -185,7 +187,7 @@ describe('MCPServerForm', () => {
 });
 
 describe('MCPServerForm field visibility', () => {
-  const onChange = vi.fn();
+  const onChange = vi.fn<typeof noop>();
 
   it('hides image/port/transport for local process type', () => {
     render(<MCPServerForm data={defaultData({ serverType: 'local' })} onChange={onChange} />);

@@ -246,7 +246,7 @@ function KeyValueEditor({
     onChange({ ...value, '': '' });
   };
 
-  const updateKey = (oldKey: string, newKey: string, idx: number) => {
+  const updateKey = (_oldKey: string, newKey: string, idx: number) => {
     const newVal: Record<string, string> = {};
     Object.entries(value).forEach(([k, v], i) => {
       newVal[i === idx ? newKey : k] = v;
@@ -500,16 +500,6 @@ export function MCPServerForm({ data, onChange, errors }: MCPServerFormProps) {
           />
           <FieldError error={errors?.name} />
           <p className="text-[10px] text-text-muted mt-1">Kebab-case identifier for this server</p>
-        </div>
-        <div>
-          <label className={labelClass}>Description</label>
-          <input
-            type="text"
-            value={(data as Record<string, unknown>).description as string ?? ''}
-            onChange={(e) => onChange({ description: e.target.value } as Partial<MCPServerFormData>)}
-            placeholder="Optional description of this server"
-            className={inputClass}
-          />
         </div>
       </Section>
 

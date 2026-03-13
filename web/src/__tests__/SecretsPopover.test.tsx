@@ -13,11 +13,13 @@ vi.mock('../lib/api', () => ({
   createVaultSecret: vi.fn().mockResolvedValue(undefined),
 }));
 
+const selectNoop = (_reference: string) => {};
+
 describe('SecretsPopover', () => {
-  let onSelect: ReturnType<typeof vi.fn>;
+  let onSelect: typeof selectNoop;
 
   beforeEach(() => {
-    onSelect = vi.fn();
+    onSelect = vi.fn<typeof selectNoop>();
     useVaultStore.setState({ secrets: null });
   });
 
