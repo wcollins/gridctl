@@ -198,6 +198,9 @@ func (s *Server) Handler() http.Handler {
 	// Stack spec endpoints
 	mux.HandleFunc("/api/stack/", s.handleStack)
 
+	// Wizard endpoints
+	mux.HandleFunc("/api/wizard/", s.handleWizard)
+
 	// Registry endpoints (always registered, even when registry is empty)
 	mux.HandleFunc("/api/registry/", s.handleRegistry)
 
