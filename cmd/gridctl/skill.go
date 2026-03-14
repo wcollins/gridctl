@@ -431,7 +431,7 @@ func runSkillTry(repoURL string) error {
 	}
 
 	fmt.Printf("\nSkill(s) will be automatically removed in %s\n", duration)
-	fmt.Println("Press Ctrl+C to remove immediately and exit.\n")
+	fmt.Println("Press Ctrl+C to remove immediately and exit.")
 
 	// Countdown with periodic updates
 	deadline := time.Now().Add(duration)
