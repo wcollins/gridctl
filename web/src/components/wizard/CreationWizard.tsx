@@ -563,8 +563,6 @@ function FormRenderer({
   formData: ReturnType<typeof useWizardStore.getState>['formData'];
   updateFormData: ReturnType<typeof useWizardStore.getState>['updateFormData'];
 }) {
-  const data = formData[resourceType as keyof typeof formData] as unknown as Record<string, unknown>;
-
   // MCP Server — full form
   if (resourceType === 'mcp-server') {
     return (
