@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridctl/gridctl/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -89,6 +90,72 @@ func TestHandleStackHealth_NoStackFile(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"status":"unknown"`)
 }
 
+func TestHandleStackExport_NoStackFile(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodGet, "/api/stack/export", nil)
+	w := httptest.NewRecorder()
+
+	s.handleStackExport(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestHandleStackSecretsMap_NoStackFile(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodGet, "/api/stack/secrets-map", nil)
+	w := httptest.NewRecorder()
+
+	s.handleStackSecretsMap(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"secrets"`)
+	assert.Contains(t, w.Body.String(), `"nodes"`)
+}
+
+func TestHandleStackRecipes(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodGet, "/api/stack/recipes", nil)
+	w := httptest.NewRecorder()
+
+	s.handleStackRecipes(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"rag-pipeline"`)
+	assert.Contains(t, w.Body.String(), `"dev-toolbox"`)
+}
+
+func TestSanitizeStackSecrets(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		value    string
+		expected string
+	}{
+		{"already vault ref", "API_KEY", "${vault:MY_KEY}", "${vault:MY_KEY}"},
+		{"sensitive password", "DB_PASSWORD", "secret123", "${vault:test_DB_PASSWORD}"},
+		{"sensitive token", "AUTH_TOKEN", "tok_abc", "${vault:test_AUTH_TOKEN}"},
+		{"non-sensitive", "HOST", "localhost", "localhost"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			env := map[string]string{tc.key: tc.value}
+			sanitizeStackSecrets(&config.Stack{
+				MCPServers: []config.MCPServer{{Name: "test", Env: env}},
+			})
+			assert.Equal(t, tc.expected, env[tc.key])
+		})
+	}
+}
+
+func TestAppendUnique(t *testing.T) {
+	result := appendUnique([]string{"a", "b"}, "c")
+	assert.Equal(t, []string{"a", "b", "c"}, result)
+
+	result = appendUnique([]string{"a", "b"}, "a")
+	assert.Equal(t, []string{"a", "b"}, result)
+}
+
 func TestHandleStack_Routing(t *testing.T) {
 	s := &Server{}
 
@@ -102,6 +169,9 @@ func TestHandleStack_Routing(t *testing.T) {
 		{"plan GET no stack", http.MethodGet, "/api/stack/plan", http.StatusServiceUnavailable},
 		{"health GET", http.MethodGet, "/api/stack/health", http.StatusOK},
 		{"spec GET no stack", http.MethodGet, "/api/stack/spec", http.StatusServiceUnavailable},
+		{"export GET no stack", http.MethodGet, "/api/stack/export", http.StatusServiceUnavailable},
+		{"secrets-map GET", http.MethodGet, "/api/stack/secrets-map", http.StatusOK},
+		{"recipes GET", http.MethodGet, "/api/stack/recipes", http.StatusOK},
 		{"unknown path", http.MethodGet, "/api/stack/unknown", http.StatusMethodNotAllowed},
 		{"validate wrong method", http.MethodGet, "/api/stack/validate", http.StatusMethodNotAllowed},
 	}
