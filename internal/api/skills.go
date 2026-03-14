@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/gridctl/gridctl/pkg/registry"
@@ -437,13 +436,4 @@ func (s *Server) handleSkillUpdates(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	writeJSON(w, summary)
-}
-
-// registryDir returns the registry directory path. Falls back to ~/.gridctl/registry.
-func (s *Server) registryDir() string {
-	if s.registryServer != nil && s.registryServer.Store() != nil {
-		return s.registryServer.Store().Dir()
-	}
-	home, _ := filepath.Abs("~/.gridctl/registry")
-	return home
 }
