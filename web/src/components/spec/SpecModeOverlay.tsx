@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo } from 'react';
 import { Eye, EyeOff, Link2 } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { useSpecStore } from '../../stores/useSpecStore';
