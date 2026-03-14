@@ -13,6 +13,8 @@ import {
   Search,
   FolderOpen,
   GitBranch,
+  Download,
+  ArrowUpCircle,
 } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { useRegistryStore } from '../../stores/useRegistryStore';
@@ -28,9 +30,11 @@ import {
   deleteRegistrySkill,
   activateRegistrySkill,
   disableRegistrySkill,
+  fetchSkillUpdates,
 } from '../../lib/api';
 import { hasWorkflowBlock } from '../../lib/workflowSync';
-import type { AgentSkill, ItemState } from '../../types';
+import { useWizardStore } from '../../stores/useWizardStore';
+import type { AgentSkill, ItemState, UpdateSummary } from '../../types';
 
 export function RegistrySidebar({ embedded = false }: { embedded?: boolean } = {}) {
   const skills = useRegistryStore((s) => s.skills);
@@ -47,6 +51,24 @@ export function RegistrySidebar({ embedded = false }: { embedded?: boolean } = {
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Update badge state
+  const [updateSummary, setUpdateSummary] = useState<UpdateSummary | null>(null);
+
+  // Check for updates periodically
+  const checkUpdates = useCallback(async () => {
+    try {
+      const summary = await fetchSkillUpdates();
+      setUpdateSummary(summary);
+    } catch {
+      // Silent
+    }
+  }, []);
+
+  // Check on mount (non-blocking)
+  useState(() => { checkUpdates(); });
+
+  const openWizard = useWizardStore((s) => s.open);
 
   const filteredSkills = useMemo(() => {
     const all = skills ?? [];
@@ -143,19 +165,35 @@ export function RegistrySidebar({ embedded = false }: { embedded?: boolean } = {
         </>
       )}
 
-      {/* Item count + New Skill button */}
+      {/* Item count + New Skill + Import buttons */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border/20">
-        <span className="text-[10px] text-text-muted">
-          {searchQuery
-            ? `${filteredSkills.length} of ${(skills ?? []).length} skills`
-            : `${(skills ?? []).length} skills`}
-        </span>
-        <button
-          onClick={() => { setEditingSkill(undefined); setShowEditor(true); }}
-          className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors"
-        >
-          <Plus size={10} /> New Skill
-        </button>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-text-muted">
+            {searchQuery
+              ? `${filteredSkills.length} of ${(skills ?? []).length} skills`
+              : `${(skills ?? []).length} skills`}
+          </span>
+          {(updateSummary?.available ?? 0) > 0 && (
+            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium flex items-center gap-0.5 animate-fade-in-scale">
+              <ArrowUpCircle size={8} />
+              {updateSummary?.available} update{(updateSummary?.available ?? 0) !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openWizard('skill')}
+            className="flex items-center gap-1 text-[10px] text-secondary hover:text-secondary/80 transition-colors"
+          >
+            <Download size={10} /> Import
+          </button>
+          <button
+            onClick={() => { setEditingSkill(undefined); setShowEditor(true); }}
+            className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors"
+          >
+            <Plus size={10} /> New
+          </button>
+        </div>
       </div>
 
       {/* Search */}

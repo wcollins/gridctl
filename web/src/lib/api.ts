@@ -1,4 +1,4 @@
-import type { GatewayStatus, MCPServerStatus, ClientStatus, ToolsListResult, RegistryStatus, AgentSkill, SkillFile, SkillValidationResult, WorkflowDefinition, ExecutionResult, TokenMetricsResponse, ValidationResult, PlanDiff, SpecHealth, StackSpec } from '../types';
+import type { GatewayStatus, MCPServerStatus, ClientStatus, ToolsListResult, RegistryStatus, AgentSkill, SkillFile, SkillValidationResult, WorkflowDefinition, ExecutionResult, TokenMetricsResponse, ValidationResult, PlanDiff, SpecHealth, StackSpec, SkillSourceStatus, SkillPreviewResponse, ImportResult, SourceUpdateCheck, UpdateSummary } from '../types';
 
 // Base URL for API calls - empty for same origin
 const API_BASE = '';
@@ -584,6 +584,89 @@ export async function saveWizardDraft(draft: {
  */
 export async function deleteWizardDraft(id: string): Promise<void> {
   return mutateJSON<void>(`/api/wizard/drafts/${encodeURIComponent(id)}`, 'DELETE');
+}
+
+// === Skills Source API ===
+
+/**
+ * List all configured skill sources with update status
+ * GET /api/skills/sources
+ */
+export async function fetchSkillSources(): Promise<SkillSourceStatus[]> {
+  return fetchJSON<SkillSourceStatus[]>('/api/skills/sources');
+}
+
+/**
+ * Add a new skill source (triggers clone + import)
+ * POST /api/skills/sources
+ */
+export async function addSkillSource(source: {
+  repo: string;
+  ref?: string;
+  path?: string;
+  trust?: boolean;
+  noActivate?: boolean;
+}): Promise<ImportResult> {
+  return mutateJSON<ImportResult>('/api/skills/sources', 'POST', source);
+}
+
+/**
+ * Remove a skill source and its imported skills
+ * DELETE /api/skills/sources/{name}
+ */
+export async function removeSkillSource(name: string): Promise<{ removed: string[]; source: string }> {
+  return mutateJSON<{ removed: string[]; source: string }>(
+    `/api/skills/sources/${encodeURIComponent(name)}`,
+    'DELETE',
+  );
+}
+
+/**
+ * Trigger update check for a source
+ * POST /api/skills/sources/{name}/check
+ */
+export async function checkSkillSource(name: string): Promise<SourceUpdateCheck> {
+  return mutateJSON<SourceUpdateCheck>(
+    `/api/skills/sources/${encodeURIComponent(name)}/check`,
+    'POST',
+  );
+}
+
+/**
+ * Apply available updates for a source
+ * POST /api/skills/sources/{name}/update
+ */
+export async function updateSkillSource(name: string): Promise<{ source: string; results: unknown[] }> {
+  return mutateJSON<{ source: string; results: unknown[] }>(
+    `/api/skills/sources/${encodeURIComponent(name)}/update`,
+    'POST',
+  );
+}
+
+/**
+ * Preview skills in a source without importing
+ * GET /api/skills/sources/{name}/preview
+ */
+export async function previewSkillSource(
+  name: string,
+  params?: { repo?: string; ref?: string; path?: string },
+): Promise<SkillPreviewResponse> {
+  const query = new URLSearchParams();
+  if (params?.repo) query.set('repo', params.repo);
+  if (params?.ref) query.set('ref', params.ref);
+  if (params?.path) query.set('path', params.path);
+  const qs = query.toString();
+  return fetchJSON<SkillPreviewResponse>(
+    `/api/skills/sources/${encodeURIComponent(name)}/preview${qs ? `?${qs}` : ''}`,
+  );
+}
+
+/**
+ * Get pending update summary across all sources
+ * GET /api/skills/updates
+ */
+export async function fetchSkillUpdates(): Promise<UpdateSummary> {
+  return fetchJSON<UpdateSummary>('/api/skills/updates');
 }
 
 // === JSON-RPC Helper (for MCP protocol calls) ===

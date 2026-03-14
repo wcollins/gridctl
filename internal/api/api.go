@@ -198,6 +198,9 @@ func (s *Server) Handler() http.Handler {
 	// Stack spec endpoints
 	mux.HandleFunc("/api/stack/", s.handleStack)
 
+	// Skills endpoints (remote skill import)
+	mux.HandleFunc("/api/skills/", s.handleSkills)
+
 	// Wizard endpoints
 	mux.HandleFunc("/api/wizard/", s.handleWizard)
 

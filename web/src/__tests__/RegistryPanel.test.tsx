@@ -189,9 +189,10 @@ describe('RegistrySidebar', () => {
     expect(screen.queryByText('This action cannot be undone.')).not.toBeInTheDocument();
   });
 
-  it('renders New Skill button', () => {
+  it('renders New and Import buttons', () => {
     render(<RegistrySidebar />);
-    expect(screen.getByText('New Skill')).toBeInTheDocument();
+    expect(screen.getByText('New')).toBeInTheDocument();
+    expect(screen.getByText('Import')).toBeInTheDocument();
   });
 
   it('shows status footer with totals', () => {
