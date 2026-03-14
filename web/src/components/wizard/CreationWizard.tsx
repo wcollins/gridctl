@@ -27,6 +27,8 @@ import { DraftManager } from './DraftManager';
 import { ReviewStep } from './steps/ReviewStep';
 import { MCPServerForm } from './steps/MCPServerForm';
 import { StackForm } from './steps/StackForm';
+import { AgentForm } from './steps/AgentForm';
+import { ResourceForm } from './steps/ResourceForm';
 import { SkillImportWizard } from './steps/SkillImportWizard';
 
 interface ResourceTypeCard {
@@ -583,63 +585,35 @@ function FormRenderer({
     );
   }
 
-  // Other types — placeholder forms (phases 7-8 will replace)
+  // Agent — full form
+  if (resourceType === 'agent') {
+    return (
+      <AgentForm
+        data={formData['agent']}
+        onChange={(partial) => updateFormData('agent', partial as Record<string, unknown>)}
+      />
+    );
+  }
+
+  // Resource — full form with presets
+  if (resourceType === 'resource') {
+    return (
+      <ResourceForm
+        data={formData['resource']}
+        onChange={(partial) => updateFormData('resource', partial as Record<string, unknown>)}
+      />
+    );
+  }
+
+  // Secret — placeholder (vault panel handles secrets)
   return (
     <div className="space-y-4">
       <div className="text-xs text-text-muted uppercase tracking-wider font-medium mb-2">
         Configure {resourceType}
       </div>
-
-      {/* Name field — universal */}
-      <div>
-        <label className="block text-xs text-text-secondary mb-1.5">Name</label>
-        <input
-          type="text"
-          value={(data?.name as string) || ''}
-          onChange={(e) =>
-            updateFormData(resourceType as keyof typeof formData, { name: e.target.value } as unknown as Record<string, unknown>)
-          }
-          placeholder={`my-${resourceType}`}
-          className="w-full bg-background/60 border border-border/40 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 transition-colors"
-        />
-      </div>
-
-      {resourceType === 'resource' && (
-        <div>
-          <label className="block text-xs text-text-secondary mb-1.5">Image</label>
-          <input
-            type="text"
-            value={(data?.image as string) || ''}
-            onChange={(e) =>
-              updateFormData('resource', { image: e.target.value })
-            }
-            placeholder="postgres:16"
-            className="w-full bg-background/60 border border-border/40 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 transition-colors"
-          />
-        </div>
-      )}
-
-      {resourceType === 'agent' && (
-        <div>
-          <label className="block text-xs text-text-secondary mb-1.5">Image</label>
-          <input
-            type="text"
-            value={(data?.image as string) || ''}
-            onChange={(e) =>
-              updateFormData('agent', { image: e.target.value })
-            }
-            placeholder="my-agent:latest"
-            className="w-full bg-background/60 border border-border/40 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 transition-colors"
-          />
-        </div>
-      )}
-
-      {/* Placeholder note for full forms */}
       <div className="mt-6 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] text-center">
         <p className="text-xs text-text-muted">
-          Full {resourceType} configuration form will be available in a future update.
-          <br />
-          Use the YAML editor for complete control.
+          Use the Vault panel to manage secrets.
         </p>
       </div>
     </div>
