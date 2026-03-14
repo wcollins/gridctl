@@ -27,6 +27,7 @@ import { DraftManager } from './DraftManager';
 import { ReviewStep } from './steps/ReviewStep';
 import { MCPServerForm } from './steps/MCPServerForm';
 import { StackForm } from './steps/StackForm';
+import { SkillImportWizard } from './steps/SkillImportWizard';
 
 interface ResourceTypeCard {
   type: ResourceType;
@@ -142,6 +143,14 @@ export function CreationWizard() {
     () => getResourceCounts(mcpServers, agents, resources, skills),
     [mcpServers, agents, resources, skills],
   );
+
+  // Skill type skips template step — goes directly to the import wizard
+  const handleTypeSelect = useCallback((type: ResourceType) => {
+    setSelectedType(type);
+    if (type === 'skill') {
+      setStep('form');
+    }
+  }, [setSelectedType, setStep]);
 
   const yamlDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const [generatedYaml, setGeneratedYaml] = useState('');
@@ -321,7 +330,12 @@ export function CreationWizard() {
 
         {/* Content */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {showPreviewPanel ? (
+          {/* Skill Import Wizard — own step flow, no preview panel */}
+          {selectedType === 'skill' && currentStep !== 'type' ? (
+            <div className="h-full overflow-y-auto scrollbar-dark px-6 py-4">
+              <SkillImportWizard />
+            </div>
+          ) : showPreviewPanel ? (
             <PanelGroup orientation="horizontal" className="h-full">
               {/* Form Panel */}
               <Panel defaultSize={55} minSize={40}>
@@ -330,7 +344,7 @@ export function CreationWizard() {
                     currentStep,
                     selectedType,
                     selectedTemplate,
-                    setSelectedType,
+                    handleTypeSelect,
                     setSelectedTemplate,
                     formData,
                     updateFormData,
@@ -373,7 +387,8 @@ export function CreationWizard() {
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — hidden when skill import wizard is active (it has its own footer) */}
+        {!(selectedType === 'skill' && currentStep !== 'type') && (
         <div className="flex items-center justify-between px-6 py-3 border-t border-border/30 flex-shrink-0">
           <div>
             {currentStepIdx > 0 && (
@@ -397,6 +412,7 @@ export function CreationWizard() {
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );
