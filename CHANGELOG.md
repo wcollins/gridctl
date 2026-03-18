@@ -2,7 +2,186 @@
 
 All notable changes to gridctl will be documented in this file.
 
-## [0.1.0-beta.2] - 2026-03-11
+## [Unreleased]
+
+
+### Bug Fixes
+
+
+- Add missing MarkerType to xyflow mock in CustomNode tests
+- Resolve strict type errors in test mocks and form
+- Remove unused registryDir method
+- Update registry panel test for renamed button
+- Remove unused variable and import to fix build
+- Remove redundant newline in export JSON output
+- Remove unused useCallback import from SpecModeOverlay
+- Remove redundant newline in skill try output
+- Add Replace flag to controller for plan apply on running stacks
+- Use Replace flag in plan apply instead of manual teardown
+- Add appliedSpec baseline to decouple polling from diff
+- Compare against appliedSpec in reload config flow
+- Render diff modal via portal with full-viewport layout
+- Skip auth for static web UI paths
+- Render creation wizard via portal to prevent viewport clipping
+- Skip template step for secret type in creation wizard
+- Pass handleTypeSelect to TypePicker to skip template step
+- Open vault panel directly when selecting secret type
+- Render vault panel via portal to prevent clipping
+- Use absolute base path for sub-route asset resolution
+- Add inline dark background to prevent white flash
+- Set hardcoded background on html/body/root elements
+- Skip sidebar transition on detachment
+- Skip bottom panel transition on detachment
+
+### Features
+
+
+- Add token counting interface with heuristic implementation
+- Add metrics accumulator with ring buffer
+- Add metrics observer bridging gateway to accumulator
+- Add ToolCallObserver interface for metrics collection
+- Hook token counting observer into HandleToolsCall
+- Add token_usage to status API and metrics endpoints
+- Wire token counter and metrics accumulator in server startup
+- Add token usage types and extend GatewayStatus
+- Extend store with token usage from status response
+- Add fetchTokenMetrics and clearTokenMetrics API functions
+- Add formatCompactNumber utility
+- Add token counter and savings indicator to status bar
+- Add recharts dependency for chart visualizations
+- Add metrics polling interval constant
+- Add bottom panel tab state for logs/metrics switching
+- Add Tremor Raw chart components adapted for Obsidian theme
+- Extract LogsTab from BottomPanel into standalone component
+- Add MetricsTab with KPI cards, area chart, and server table
+- Add SparkChart component for inline sparkline visualizations
+- Export SparkChart from chart component barrel
+- Add per-server token usage section with sparkline and savings
+- Integrate token usage section into sidebar for MCP servers
+- Add heat map and metrics detached state to UI store
+- Extend broadcast channel with metrics window type
+- Add metrics window type to window manager
+- Add token heat intensity hook for graph nodes
+- Add keyboard shortcuts for bottom panel tab switching
+- Add token heat overlay glow to MCP server nodes
+- Add heat map toggle button to canvas controls
+- Add popout button to metrics tab
+- Add detached metrics window page
+- Register detached metrics page route
+- Wire tab switching shortcuts in app component
+- Add TOON v3.0 output format converter
+- Add CSV output format converter
+- Add format dispatcher with json and text support
+- Add OutputFormat field to GatewayConfig and MCPServer
+- Add output_format validation for gateway and servers
+- Add FormatSavingsRecorder interface
+- Add gateway format conversion pipeline
+- Add RecordFormatSavings to accumulator
+- Pass OutputFormat through ServerRegistrar
+- Wire format conversion in gateway builder
+- Add toon and csv to valid output formats
+- Add toon and csv output assembly
+- Add OutputFormat to MCPServerStatus
+- Pass OutputFormat through API status
+- Add outputFormat to TypeScript types
+- Pass outputFormat to node data
+- Add format badge to server nodes
+- Add output format row to sidebar
+- Add spec validation with severity levels
+- Add spec plan diff engine
+- Add gridctl validate command
+- Add gridctl plan command
+- Register validate and plan commands
+- Add stack file setter and spec route registration
+- Add stack spec API endpoints
+- Wire stack file path to API server
+- Add spec visibility TypeScript types
+- Add stack spec API client functions
+- Add spec tab to bottom panel tab type
+- Add spec Zustand store
+- Add spec tab with syntax highlighting and validation
+- Add spec health badge for status bar
+- Add spec diff modal for config reload
+- Add spec components barrel export
+- Integrate spec tab into bottom panel
+- Add spec health badge to status bar
+- Wire reload button to spec diff modal
+- Add skill source config and semver resolution
+- Add origin sidecar for imported skills
+- Add skills lock file for version pinning
+- Add remote skill clone and discovery
+- Add security scanner for imported skills
+- Add skill import orchestration
+- Add background skill update checker
+- Add skill CLI commands for remote import
+- Register skill command in root
+- Add wizard draft CRUD API endpoints
+- Register wizard API routes
+- Add form-to-YAML serialization utility
+- Add wizard draft API client functions
+- Add wizard Zustand store with session persistence
+- Add template selection grid component
+- Add live YAML preview with validation annotations
+- Add Form/YAML expert mode toggle
+- Add named draft save/load/delete manager
+- Add spec review step with validation gate
+- Add creation wizard modal with type picker and split-pane
+- Add create resource button to header
+- Add secrets popover for inline vault integration
+- Add 6-variant dynamic MCP server form
+- Wire MCP server form into creation wizard
+- Add stack spec composition form with nested sub-forms
+- Wire stack form into creation wizard
+- Add empty-state canvas CTA for stack creation
+- Add skill import and update TypeScript types
+- Add skill source API client functions
+- Add Dir accessor to registry Store
+- Add skill source REST API endpoints
+- Register skill source routes in API server
+- Add source URL input step for skill import
+- Add skill browse and preview step
+- Add 4-step skill import wizard
+- Integrate skill import wizard into creation flow
+- Add import button and update badges to sidebar
+- Add agent spec form with container/headless/A2A support
+- Add resource spec form with database presets
+- Wire agent and resource forms into creation wizard
+- Add quick-add links to empty canvas CTA
+- Add background skill update check on startup
+- Show skill update notice after deploy
+- Add drift overlay toggle to UI store
+- Add drift overlay component for spec-vs-running state
+- Export DriftOverlay from spec barrel
+- Integrate drift overlay toggle into canvas controls
+- Add bulk update all button to registry sidebar
+- Add skill fingerprinting with behavioral change detection
+- Add fingerprint field to skill origin tracking
+- Add fingerprint field to skill lock entries
+- Integrate fingerprint computation into skill import and update
+- Add gridctl export command for spec reverse-engineering
+- Enhance skill try with countdown display and signal handling
+- Add export, secrets-map, and recipes API endpoints
+- Add spec mode, wiring mode, and heatmap toggles to UI store
+- Add export, secrets-map, and recipes API client functions
+- Add canvas spec mode overlay with ghost and warning nodes
+- Add secret heatmap overlay with color-coded shared secrets
+- Add wiring mode overlay for agent-server connections
+- Integrate spec mode, wiring mode, and heatmap into canvas
+- Add stack recipe picker with category filtering
+- Add transport compatibility advisor for wizard
+- Integrate transport advisor into MCP server form
+- Add vaultDetached state to UI store
+- Add vault to detached window sync type
+- Add vault window management with instant detach
+- Add vault route with dark suspense fallback
+- Rewrite vault panel with search, resize, and popout
+- Add detached vault page for pop-out window
+
+### Refactoring
+
+
+- Convert BottomPanel to tabbed container for logs and metrics
+- Fix staticcheck QF1003, QF1012, ST1005, ST1023 issues## [0.1.0-beta.2] - 2026-03-11
 
 
 ### Bug Fixes
