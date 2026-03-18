@@ -176,6 +176,19 @@ gridctl destroy examples/getting-started/skills-basic.yaml
 
 Fast, consistent, ephemeral, flexible, and version controlled! Many practitioners use different combinations of `MCP Servers` and `Agents` depending on what they are working on. Being able to instantiate, from a single file, the various combinations needed for the right task, saves time in _development_ and _prototyping_. The `stack.yaml` file is where you define this.
 
+### Spec-Driven Workflow
+
+The `stack.yaml` file has always been your source of truth. Now you have the full lifecycle tooling to match — validate before you commit, preview before you deploy, and detect the moment your environment drifts from what's in version control:
+
+```bash
+gridctl validate stack.yaml    # Lint and schema-check the spec (exit 0/1/2)
+gridctl plan stack.yaml        # Diff against running state — see exactly what changes
+gridctl deploy stack.yaml      # Apply the spec
+gridctl export                 # Reverse-engineer stack.yaml from a running stack
+```
+
+Drift detection runs in the background: the canvas flags servers that are running but absent from your spec, and declarations in your spec that haven't been deployed — so your YAML and your environment stay in sync. Need to build a stack from scratch? The visual spec builder lets you compose `stack.yaml` through a guided wizard and export the result.
+
 ### Protocol Bridge
 
 Aggregates tools from HTTP servers, stdio processes, SSH tunnels, and external URLs into a unified gateway. Automatic namespacing (`server__tool`) prevents collisions.
@@ -195,26 +208,10 @@ Aggregates tools from HTTP servers, stdio processes, SSH tunnels, and external U
 
 Are you paying for your own tokens for learning? Even if you aren't, being optimized is critical for not overloading that context window! Reducing the numbers of tools and scoping things out correctly, significantly reduces the likelihood of _"tool confusion"_ e.g., a given LLM selects a similarly named tool from the wrong server.
 
-By using `uses` and `tools` filters in the _stack.yaml_ file, `gridctl` filters this list *before* it reaches the LLM. This way, you only get what you need. This is implemented at two levels:
+By using `uses` and `tools` filters in the _stack.yaml_ file, `gridctl` filters this list *before* it reaches the LLM. This way, you only get what you need. Filtering is enforced at two levels:
 
-#### Server-Level Filtering (`pkg/mcp/client.go`)
-
-When `gridctl` initializes a connection to a downstream MCP server, it applies a whitelist during the `RefreshTools` phase.
-
-```go
-if len(c.toolWhitelist) > 0 {
-    // Only tools in the whitelist are stored in the client's internal cache
-    c.tools = filteredTools
-}
-```
-
-#### Agent-Level Filtering (`pkg/mcp/gateway.go`)
-
-The `Gateway` validates every tool list request and tool call against the agent's specific `ToolSelector` configuration.
-- `HandleToolsListForAgent`: Filters the aggregated tool list dynamically based on the requesting agent's identity.
-- `HandleToolsCallForAgent`: Provides a security layer by rejecting execution attempts for unauthorized tools, even if the model somehow knows the tool name.
-
-
+- **Server-level**: tools are whitelisted when `gridctl` connects to the downstream MCP server — unauthorized tools are never loaded into the gateway
+- **Agent-level**: the gateway validates every tool list request and tool call against the requesting agent's `ToolSelector` — unauthorized calls are rejected even if the model knows the tool name
 
 #### Filtering in Action
 
@@ -332,18 +329,27 @@ Steps without dependencies run in parallel. Template expressions reference input
 ## 📚 CLI Reference
 
 ```bash
+gridctl validate <stack.yaml>        # Validate stack YAML before deploying (exit 0/1/2)
+gridctl plan <stack.yaml>            # Preview changes against running state
 gridctl deploy <stack.yaml>          # Start containers and gateway
 gridctl deploy <stack.yaml> -f       # Run in foreground (debug mode)
 gridctl deploy <stack.yaml> -p 9000  # Custom gateway port
 gridctl deploy <stack.yaml> --watch  # Watch for changes and hot reload
 gridctl deploy <stack.yaml> --flash  # Deploy and auto-link LLM clients
 gridctl deploy <stack.yaml> --code-mode  # Enable code mode (search + execute)
+gridctl export                       # Reverse-engineer stack.yaml from running stack
 gridctl status                       # Show running stacks
 gridctl info                         # Show detected container runtime
 gridctl link                         # Connect an LLM client to the gateway
 gridctl unlink                       # Remove gridctl from an LLM client
 gridctl reload                       # Hot reload a running stack
 gridctl destroy <stack.yaml>         # Stop and remove containers
+gridctl vault set <key> <value>      # Store a secret in the encrypted vault
+gridctl vault get <key>              # Retrieve a secret from the vault
+gridctl vault list                   # List all vault keys
+gridctl vault lock / unlock          # Lock or unlock the vault
+gridctl skill list                   # List skills in the registry
+gridctl skill import <url>           # Import skills from a remote git repository
 ```
 
 ## 🖥️ Connect LLM Application
@@ -433,6 +439,12 @@ Restart Claude Desktop after editing. All tools from your stack are now availabl
 | A2A protocol | Experimental | May change without notice |
 | Podman runtime | Experimental | May change without notice |
 | Skills registry workflows | Experimental | May change without notice |
+| Stack validation (validate) | Stable | Backward compatible in 0.x |
+| Stack planning (plan) | Stable | Backward compatible in 0.x |
+| Stack export (export) | Experimental | May change without notice |
+| Spec drift detection | Experimental | May change without notice |
+| Visual spec builder | Experimental | May change without notice |
+| Skills import (skill import) | Experimental | May change without notice |
 
 ## ⚠️ Known Limitations
 
