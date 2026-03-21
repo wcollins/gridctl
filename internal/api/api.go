@@ -31,10 +31,10 @@ const statusLocked = 423
 
 // Server provides the combined API server for gridctl.
 type Server struct {
-	gateway        *mcp.Gateway
-	mcpHandler     *mcp.Handler
-	sseServer      *mcp.SSEServer
-	a2aGateway     *a2a.Gateway
+	gateway          *mcp.Gateway
+	streamableServer *mcp.StreamableHTTPServer
+	sseServer        *mcp.SSEServer
+	a2aGateway       *a2a.Gateway
 	staticFS       fs.FS
 	dockerClient   dockerclient.DockerClient
 	stackName      string
@@ -55,10 +55,10 @@ type Server struct {
 // NewServer creates a new API server.
 func NewServer(gateway *mcp.Gateway, staticFS fs.FS) *Server {
 	return &Server{
-		gateway:    gateway,
-		mcpHandler: mcp.NewHandler(gateway),
-		sseServer:  mcp.NewSSEServer(gateway),
-		staticFS:   staticFS,
+		gateway:          gateway,
+		streamableServer: mcp.NewStreamableHTTPServer(gateway, nil),
+		sseServer:        mcp.NewSSEServer(gateway),
+		staticFS:         staticFS,
 	}
 }
 
@@ -105,6 +105,7 @@ func (s *Server) ReloadHandler() *reload.Handler {
 // SetAllowedOrigins sets the CORS allowed origins for the server.
 func (s *Server) SetAllowedOrigins(origins []string) {
 	s.allowedOrigins = origins
+	s.streamableServer.SetAllowedOrigins(origins)
 }
 
 // SetAuth configures authentication for the server.
@@ -156,6 +157,9 @@ func (s *Server) Close() {
 	if s.sseServer != nil {
 		s.sseServer.Close()
 	}
+	if s.streamableServer != nil {
+		s.streamableServer.Close()
+	}
 	if s.gateway != nil {
 		s.gateway.Close()
 	}
@@ -165,10 +169,10 @@ func (s *Server) Close() {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	// MCP endpoints - both POST (JSON-RPC) and SSE
-	mux.Handle("/mcp", s.mcpHandler)                       // POST JSON-RPC
-	mux.Handle("/sse", s.sseServer)                        // GET SSE connection
-	mux.HandleFunc("/message", s.sseServer.HandleMessage)  // POST message for SSE
+	// MCP endpoints - Streamable HTTP (POST/GET/DELETE) and legacy SSE negotiation
+	mux.Handle("/mcp", s.streamableServer)                 // Streamable HTTP transport
+	mux.Handle("/sse", s.sseServer)                        // Legacy negotiation redirect
+	mux.HandleFunc("/message", s.sseServer.HandleMessage)  // Legacy endpoint (410 Gone)
 
 	// A2A endpoints
 	if s.a2aGateway != nil {
@@ -178,6 +182,7 @@ func (s *Server) Handler() http.Handler {
 
 	// API endpoints
 	mux.HandleFunc("/api/status", s.handleStatus)
+	mux.HandleFunc("/api/sessions", s.handleSessions)
 	mux.HandleFunc("/api/mcp-servers/", s.handleMCPServerAction)
 	mux.HandleFunc("/api/mcp-servers", s.handleMCPServers)
 	mux.HandleFunc("/api/tools", s.handleTools)
@@ -268,6 +273,23 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, status)
+}
+
+// handleSessions returns active MCP session count and IDs.
+// GET /api/sessions
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	response := struct {
+		Count    int      `json:"count"`
+		Sessions []string `json:"sessions"`
+	}{
+		Count:    s.streamableServer.SessionCount(),
+		Sessions: s.streamableServer.SessionIDs(),
+	}
+	writeJSON(w, response)
 }
 
 // handleA2AAgentCards returns all agent cards for A2A discovery.
