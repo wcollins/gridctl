@@ -57,10 +57,7 @@ func TestSSEServer_NegotiationResponse_IsImmediate(t *testing.T) {
 		sse.ServeHTTP(w, req)
 	}()
 
-	select {
-	case <-done:
-		// ServeHTTP returned immediately — correct
-	}
+	<-done // ServeHTTP returned immediately — correct
 }
 
 func TestSSEServer_HandleMessage_Gone(t *testing.T) {

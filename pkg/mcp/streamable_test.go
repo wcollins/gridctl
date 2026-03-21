@@ -772,6 +772,7 @@ func TestStreamableHTTPServer_Get_CancelCancelsOldStream(t *testing.T) {
 	sessionID := initializeStreamable(t, srv, "")
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
 	req1 := httptest.NewRequest(http.MethodGet, "/mcp", nil).WithContext(ctx1)
 	req1.Header.Set("Mcp-Session-Id", sessionID)
 	w1 := httptest.NewRecorder()
@@ -804,7 +805,6 @@ func TestStreamableHTTPServer_Get_CancelCancelsOldStream(t *testing.T) {
 		// First stream was cancelled — correct
 	case <-time.After(200 * time.Millisecond):
 		t.Error("expected first SSE stream to be cancelled when second opens")
-		cancel1()
 	}
 
 	cancel2()
@@ -838,7 +838,7 @@ func TestStreamableHTTPServer_ToolsCall_InvalidParams(t *testing.T) {
 	srv := NewStreamableHTTPServer(NewGateway(), nil)
 	sessionID := initializeStreamable(t, srv, "")
 
-	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":"invalid"}`)
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":"invalid"}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Mcp-Session-Id", sessionID)
 	w := httptest.NewRecorder()
