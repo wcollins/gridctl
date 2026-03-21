@@ -98,7 +98,7 @@ func (h *Handler) handleInitialize(req *jsonrpc.Request) jsonrpc.Response {
 		}
 	}
 
-	result, err := h.gateway.HandleInitialize(params)
+	result, _, err := h.gateway.HandleInitialize(params)
 	if err != nil {
 		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.InternalError, err.Error())
 	}
