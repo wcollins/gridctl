@@ -43,7 +43,7 @@ func TestNewFileHandler_ErrorOnUnwritablePath(t *testing.T) {
 
 	// Make directory read-only.
 	require.NoError(t, os.Chmod(dir, 0555))
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0755) })
 
 	path := filepath.Join(dir, "gridctl.log")
 	_, err := NewFileHandler(path, FileOpts{})
