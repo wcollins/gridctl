@@ -2919,6 +2919,8 @@ func TestGateway_HandleToolsCall_FormatConversion_LargePayload(t *testing.T) {
 	g := NewGateway()
 	g.SetDefaultOutputFormat("toon")
 	g.SetLogger(logging.NewDiscardLogger())
+	// Disable truncation so this test focuses on format conversion skip behavior.
+	g.SetMaxToolResultBytes(maxFormatPayloadSize * 10)
 	ctx := context.Background()
 
 	// Create a payload > 1MB
@@ -2949,6 +2951,74 @@ func TestGateway_HandleToolsCall_FormatConversion_LargePayload(t *testing.T) {
 	// Large payload should be left unchanged
 	if result.Content[0].Text != largeJSON {
 		t.Error("expected large payload to be left unchanged")
+	}
+}
+
+func TestGateway_HandleToolsCall_Truncation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetLogger(logging.NewDiscardLogger())
+	g.SetMaxToolResultBytes(100)
+	ctx := context.Background()
+
+	largeText := strings.Repeat("a", 500)
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "fetch", Description: "Fetch data"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+		&ToolCallResult{Content: []Content{NewTextContent(largeText)}}, nil,
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__fetch",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	text := result.Content[0].Text
+	if len(text) >= len(largeText) {
+		t.Errorf("expected result to be truncated, got length %d", len(text))
+	}
+	if !strings.Contains(text, "[truncated: 500 bytes, showing first 100 bytes]") {
+		t.Errorf("expected truncation suffix in result, got: %s", text)
+	}
+}
+
+func TestGateway_HandleToolsCall_Truncation_UnderLimit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetLogger(logging.NewDiscardLogger())
+	g.SetMaxToolResultBytes(1000)
+	ctx := context.Background()
+
+	smallText := "small result"
+
+	client := setupMockAgentClient(ctrl, "server1", []Tool{
+		{Name: "fetch", Description: "Fetch data"},
+	})
+	client.EXPECT().CallTool(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+		&ToolCallResult{Content: []Content{NewTextContent(smallText)}}, nil,
+	).AnyTimes()
+	g.Router().AddClient(client)
+	g.Router().RefreshTools()
+	g.SetServerMeta(MCPServerConfig{Name: "server1"})
+
+	result, err := g.HandleToolsCall(ctx, ToolCallParams{
+		Name:      "server1__fetch",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Content[0].Text != smallText {
+		t.Errorf("expected unchanged result, got: %s", result.Content[0].Text)
 	}
 }
 

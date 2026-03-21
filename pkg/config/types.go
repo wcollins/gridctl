@@ -45,6 +45,11 @@ type GatewayConfig struct {
 	// Values: "json" (default), "toon", "csv", "text".
 	// Per-server output_format overrides this value.
 	OutputFormat string `yaml:"output_format,omitempty"`
+
+	// MaxToolResultBytes sets the maximum size of a tool result in bytes before truncation.
+	// Results exceeding this limit are truncated with a suffix indicating the original size.
+	// Default: 65536 (64KB). Set to 0 to use the default.
+	MaxToolResultBytes int `yaml:"maxToolResultBytes,omitempty" json:"maxToolResultBytes,omitempty"`
 }
 
 // AuthConfig configures gateway authentication.

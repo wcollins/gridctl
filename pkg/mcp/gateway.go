@@ -91,6 +91,8 @@ type Gateway struct {
 	tokenCounter          token.Counter          // token counter for format savings calculation
 	formatSavingsRecorder FormatSavingsRecorder  // optional recorder for format savings
 
+	maxToolResultBytes int // maximum tool result size before truncation (0 = default 64KB)
+
 	toolCountWarned bool // whether the tool count hint has been logged
 }
 
@@ -154,6 +156,14 @@ func (g *Gateway) SetDefaultOutputFormat(format string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.defaultOutputFormat = format
+}
+
+// SetMaxToolResultBytes sets the maximum tool result size in bytes before truncation.
+// When set to 0, the default of 65536 (64KB) is used.
+func (g *Gateway) SetMaxToolResultBytes(n int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.maxToolResultBytes = n
 }
 
 // SetTokenCounter sets the token counter used for format savings calculation.
@@ -844,6 +854,9 @@ func (g *Gateway) HandleToolsCall(ctx context.Context, params ToolCallParams) (*
 
 	g.logger.Info("tool call finished", "server", client.Name(), "tool", toolName, "duration", duration, "is_error", result.IsError)
 
+	// Truncation: clamp oversized results before logging or format conversion
+	g.applyTruncation(client.Name(), toolName, result)
+
 	// Format conversion: convert JSON content to the configured output format
 	g.applyFormatConversion(client.Name(), result)
 
@@ -922,6 +935,38 @@ func (g *Gateway) applyFormatConversion(serverName string, result *ToolCallResul
 	// Record format savings if any conversion happened
 	if recorder != nil && totalOriginalTokens > 0 {
 		recorder.RecordFormatSavings(serverName, totalOriginalTokens, totalFormattedTokens)
+	}
+}
+
+// defaultMaxToolResultBytes is the default maximum tool result size (64KB).
+const defaultMaxToolResultBytes = 65536
+
+// applyTruncation truncates oversized tool results before they enter the log buffer.
+// It modifies result.Content in place. Results at or under the limit are unchanged.
+func (g *Gateway) applyTruncation(serverName, toolName string, result *ToolCallResult) {
+	if result == nil {
+		return
+	}
+
+	g.mu.RLock()
+	limit := g.maxToolResultBytes
+	g.mu.RUnlock()
+
+	if limit == 0 {
+		limit = defaultMaxToolResultBytes
+	}
+
+	for i, c := range result.Content {
+		if c.Type != "text" || c.Text == "" {
+			continue
+		}
+		truncated, wasTruncated := format.TruncateResult(c.Text, limit)
+		if wasTruncated {
+			g.logger.Warn("tool result truncated",
+				"tool", toolName, "server", serverName,
+				"original_bytes", len(c.Text), "limit_bytes", limit)
+			result.Content[i].Text = truncated
+		}
 	}
 }
 
