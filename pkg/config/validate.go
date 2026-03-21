@@ -57,6 +57,11 @@ func Validate(s *Stack) error {
 		}
 	}
 
+	// Gateway maxToolResultBytes validation
+	if s.Gateway != nil && s.Gateway.MaxToolResultBytes < 0 {
+		errs = append(errs, ValidationError{"gateway.maxToolResultBytes", "must be a non-negative integer"})
+	}
+
 	// Gateway auth validation
 	if s.Gateway != nil && s.Gateway.Auth != nil {
 		auth := s.Gateway.Auth
