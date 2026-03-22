@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
+	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/gridctl/gridctl/pkg/jsonrpc"
 	"github.com/gridctl/gridctl/pkg/tracing"
@@ -80,30 +81,49 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleMethod routes the request to the appropriate handler.
+// It creates a root span for every MCP request, populated with standard
+// semantic attributes (mcp.method.name, mcp.protocol.version, mcp.session.id).
 func (h *Handler) handleMethod(r *http.Request, req *jsonrpc.Request) jsonrpc.Response {
+	tracer := otel.Tracer("gridctl.gateway")
+	ctx, span := tracer.Start(r.Context(), req.Method)
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("mcp.method.name", req.Method),
+		attribute.String("mcp.protocol.version", MCPProtocolVersion),
+	)
+	if sid := r.Header.Get("Mcp-Session-Id"); sid != "" {
+		span.SetAttributes(attribute.String("mcp.session.id", sid))
+	}
+	r = r.WithContext(ctx)
+
+	var resp jsonrpc.Response
 	switch req.Method {
 	case "initialize":
-		return h.handleInitialize(req)
+		resp = h.handleInitialize(req)
 	case "notifications/initialized":
-		// Client notification, just acknowledge
-		return jsonrpc.NewSuccessResponse(req.ID, nil)
+		resp = jsonrpc.NewSuccessResponse(req.ID, nil)
 	case "tools/list":
-		return h.handleToolsList(r, req)
+		resp = h.handleToolsList(r, req)
 	case "tools/call":
-		return h.handleToolsCall(r, req)
+		resp = h.handleToolsCall(r, req)
 	case "prompts/list":
-		return h.handlePromptsList(req)
+		resp = h.handlePromptsList(req)
 	case "prompts/get":
-		return h.handlePromptsGet(req)
+		resp = h.handlePromptsGet(req)
 	case "resources/list":
-		return h.handleResourcesList(req)
+		resp = h.handleResourcesList(req)
 	case "resources/read":
-		return h.handleResourcesRead(req)
+		resp = h.handleResourcesRead(req)
 	case "ping":
-		return jsonrpc.NewSuccessResponse(req.ID, struct{}{})
+		resp = jsonrpc.NewSuccessResponse(req.ID, struct{}{})
 	default:
-		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.MethodNotFound, fmt.Sprintf("Unknown method: %s", req.Method))
+		resp = jsonrpc.NewErrorResponse(req.ID, jsonrpc.MethodNotFound, fmt.Sprintf("Unknown method: %s", req.Method))
 	}
+
+	if resp.Error != nil {
+		span.SetStatus(codes.Error, resp.Error.Message)
+	}
+	return resp
 }
 
 // handleInitialize handles the initialize request.
@@ -155,11 +175,8 @@ func (h *Handler) handleToolsCall(r *http.Request, req *jsonrpc.Request) jsonrpc
 		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.InvalidParams, "Invalid tools/call params")
 	}
 
-	// Start root span for this tools/call request.
-	tracer := otel.Tracer("gridctl.gateway")
-	ctx, span := tracer.Start(r.Context(), "tools/call")
-	defer span.End()
-	span.SetAttributes(attribute.String("mcp.method.name", "tools/call"))
+	// Enrich the root span (created by handleMethod) with tool-specific attributes.
+	span := oteltrace.SpanFromContext(r.Context())
 	if params.Name != "" {
 		span.SetAttributes(attribute.String("tool.name", params.Name))
 	}
@@ -171,7 +188,6 @@ func (h *Handler) handleToolsCall(r *http.Request, req *jsonrpc.Request) jsonrpc
 	}
 
 	if agentName != "" && !h.gateway.HasAgent(agentName) {
-		span.SetStatus(codes.Error, "unknown agent")
 		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.InvalidRequest, "unknown agent: "+agentName)
 	}
 
@@ -179,15 +195,14 @@ func (h *Handler) handleToolsCall(r *http.Request, req *jsonrpc.Request) jsonrpc
 	var err error
 	if agentName != "" {
 		// Validate agent has access to this tool's MCP server
-		result, err = h.gateway.HandleToolsCallForAgent(ctx, agentName, params)
+		result, err = h.gateway.HandleToolsCallForAgent(r.Context(), agentName, params)
 	} else {
 		// No agent header - allow all tools
-		result, err = h.gateway.HandleToolsCall(ctx, params)
+		result, err = h.gateway.HandleToolsCall(r.Context(), params)
 	}
 
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
 		return jsonrpc.NewErrorResponse(req.ID, jsonrpc.InternalError, err.Error())
 	}
 	if result != nil && result.IsError {

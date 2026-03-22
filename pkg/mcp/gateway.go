@@ -692,8 +692,21 @@ func (g *Gateway) HandleToolsCallForAgent(ctx context.Context, agentName string,
 		}, nil
 	}
 
-	// Check if agent has access to this specific tool
-	if !g.isToolAllowedForAgent(agentName, serverName, originalToolName) {
+	// Child span: ACL check.
+	tracer := otel.Tracer("gridctl.gateway")
+	_, aclSpan := tracer.Start(ctx, "mcp.acl.check")
+	aclSpan.SetAttributes(
+		attribute.String("agent.name", agentName),
+		attribute.String("server.name", serverName),
+		attribute.String("tool.name", originalToolName),
+	)
+	allowed := g.isToolAllowedForAgent(agentName, serverName, originalToolName)
+	if !allowed {
+		aclSpan.SetStatus(codes.Error, "access denied")
+	}
+	aclSpan.End()
+
+	if !allowed {
 		g.logger.Warn("tool access denied", "agent", agentName, "tool", originalToolName, "server", serverName)
 		return &ToolCallResult{
 			Content: []Content{NewTextContent(fmt.Sprintf("Access denied: agent '%s' cannot use tool '%s' from '%s'", agentName, originalToolName, serverName))},
@@ -835,13 +848,21 @@ func (g *Gateway) HandleToolsCall(ctx context.Context, params ToolCallParams) (*
 		return cm.HandleCall(ctx, params, g, allTools)
 	}
 
+	// Child span: routing decision.
+	tracer := otel.Tracer("gridctl.gateway")
+	_, routeSpan := tracer.Start(ctx, "mcp.routing")
+	routeSpan.SetAttributes(attribute.String("tool.name", params.Name))
 	client, toolName, err := g.router.RouteToolCall(params.Name)
 	if err != nil {
+		routeSpan.SetStatus(codes.Error, err.Error())
+		routeSpan.End()
 		return &ToolCallResult{
 			Content: []Content{NewTextContent(fmt.Sprintf("Error: %v", err))},
 			IsError: true,
 		}, nil
 	}
+	routeSpan.SetAttributes(attribute.String("server.name", client.Name()))
+	routeSpan.End()
 
 	// Populate trace ID on the logger so structured logs are correlated.
 	logger := g.logger
@@ -849,15 +870,20 @@ func (g *Gateway) HandleToolsCall(ctx context.Context, params ToolCallParams) (*
 		logger = logging.WithTraceID(logger, sc.TraceID().String())
 	}
 
-	// Create child span for the downstream client call.
-	tracer := otel.Tracer("gridctl.gateway")
+	// Resolve actual transport type from server metadata.
+	g.mu.RLock()
+	serverCfg, hasMeta := g.serverMeta[client.Name()]
+	g.mu.RUnlock()
+	networkTransport := resolveNetworkTransport(serverCfg, hasMeta)
+
+	// Child span: downstream client call.
 	ctx, span := tracer.Start(ctx, "mcp.client.call_tool")
 	defer span.End()
 	span.SetAttributes(
 		attribute.String("mcp.method.name", "tools/call"),
 		attribute.String("server.name", client.Name()),
 		attribute.String("tool.name", toolName),
-		attribute.String("network.transport", string(TransportHTTP)),
+		attribute.String("network.transport", networkTransport),
 	)
 
 	logger.Info("tool call started", "server", client.Name(), "tool", toolName)
@@ -1169,6 +1195,31 @@ type MCPServerStatus struct {
 	Healthy      *bool      `json:"healthy,omitempty"`      // Health check result (nil if not yet checked)
 	LastCheck    *time.Time `json:"lastCheck,omitempty"`    // When last health check ran
 	HealthError  string     `json:"healthError,omitempty"`  // Error message if unhealthy
+}
+
+// resolveNetworkTransport returns the network.transport attribute value for a
+// downstream MCP server based on its registered configuration.
+func resolveNetworkTransport(cfg MCPServerConfig, hasMeta bool) string {
+	if !hasMeta {
+		return string(TransportHTTP)
+	}
+	if cfg.SSH {
+		return "ssh"
+	}
+	if cfg.LocalProcess {
+		return "process"
+	}
+	if cfg.OpenAPI {
+		return string(TransportHTTP)
+	}
+	switch cfg.Transport {
+	case TransportStdio:
+		return string(TransportStdio)
+	case TransportSSE:
+		return string(TransportSSE)
+	default:
+		return string(TransportHTTP)
+	}
 }
 
 // buildSSHCommand constructs the ssh command with all options.
