@@ -14,8 +14,6 @@ import (
 	"github.com/gridctl/gridctl/pkg/logging"
 )
 
-const tracerName = "gridctl.gateway"
-
 // Provider wraps the OTel TracerProvider and the in-memory trace buffer.
 // Call Init to configure and register the global OTel provider.
 // Call Shutdown to flush and shut down cleanly.

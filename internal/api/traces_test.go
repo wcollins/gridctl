@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -52,12 +53,8 @@ func TestHandleTraces_withData(t *testing.T) {
 	srv := newTestServer(t)
 	buf := tracing.NewBuffer(100, time.Hour)
 
-	// Inject test traces directly.
-	buf.ExportSpans(nil, nil) // no-op
-	// We test via the public addLocked path indirectly using Filter.
-	// Here we seed the buffer using Filter opts (which goes through GetRecent).
-	// Since adding directly is internal, use Shutdown to add pending spans.
-	_ = buf.Shutdown(nil)
+	// Buffer starts empty; Shutdown is a no-op on an empty pending map.
+	_ = buf.Shutdown(context.Background())
 
 	srv.SetTraceBuffer(buf)
 
