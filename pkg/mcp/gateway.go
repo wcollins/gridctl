@@ -13,6 +13,11 @@ import (
 
 	"encoding/json"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/docker/docker/api/types/container"
 	"github.com/gridctl/gridctl/pkg/config"
 	"github.com/gridctl/gridctl/pkg/dockerclient"
@@ -838,21 +843,43 @@ func (g *Gateway) HandleToolsCall(ctx context.Context, params ToolCallParams) (*
 		}, nil
 	}
 
-	g.logger.Info("tool call started", "server", client.Name(), "tool", toolName)
+	// Populate trace ID on the logger so structured logs are correlated.
+	logger := g.logger
+	if sc := trace.SpanFromContext(ctx).SpanContext(); sc.IsValid() {
+		logger = logging.WithTraceID(logger, sc.TraceID().String())
+	}
+
+	// Create child span for the downstream client call.
+	tracer := otel.Tracer("gridctl.gateway")
+	ctx, span := tracer.Start(ctx, "mcp.client.call_tool")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("mcp.method.name", "tools/call"),
+		attribute.String("server.name", client.Name()),
+		attribute.String("tool.name", toolName),
+		attribute.String("network.transport", string(TransportHTTP)),
+	)
+
+	logger.Info("tool call started", "server", client.Name(), "tool", toolName)
 	start := time.Now()
 
 	result, err := client.CallTool(ctx, toolName, params.Arguments)
 	duration := time.Since(start)
 
 	if err != nil {
-		g.logger.Warn("tool call failed", "server", client.Name(), "tool", toolName, "duration", duration, "error", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		logger.Warn("tool call failed", "server", client.Name(), "tool", toolName, "duration", duration, "error", err)
 		return &ToolCallResult{
 			Content: []Content{NewTextContent(fmt.Sprintf("Error calling tool: %v", err))},
 			IsError: true,
 		}, nil
 	}
 
-	g.logger.Info("tool call finished", "server", client.Name(), "tool", toolName, "duration", duration, "is_error", result.IsError)
+	if result.IsError {
+		span.SetStatus(codes.Error, "tool returned error result")
+	}
+	logger.Info("tool call finished", "server", client.Name(), "tool", toolName, "duration", duration, "is_error", result.IsError)
 
 	// Truncation: clamp oversized results before logging or format conversion
 	g.applyTruncation(client.Name(), toolName, result)
