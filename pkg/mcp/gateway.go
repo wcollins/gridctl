@@ -911,7 +911,7 @@ func (g *Gateway) HandleToolsCall(ctx context.Context, params ToolCallParams) (*
 	g.applyTruncation(client.Name(), toolName, result)
 
 	// Format conversion: convert JSON content to the configured output format
-	g.applyFormatConversion(client.Name(), result)
+	g.applyFormatConversion(ctx, client.Name(), result)
 
 	// Notify observer asynchronously to avoid adding latency to tool calls
 	g.mu.RLock()
@@ -930,7 +930,7 @@ const maxFormatPayloadSize = 1 << 20
 
 // applyFormatConversion converts tool result content to the configured output format.
 // It modifies result.Content in place. On any failure, content is left unchanged.
-func (g *Gateway) applyFormatConversion(serverName string, result *ToolCallResult) {
+func (g *Gateway) applyFormatConversion(ctx context.Context, serverName string, result *ToolCallResult) {
 	if result == nil || result.IsError {
 		return
 	}
@@ -939,6 +939,14 @@ func (g *Gateway) applyFormatConversion(serverName string, result *ToolCallResul
 	if outputFormat == "" || outputFormat == "json" || outputFormat == "text" {
 		return
 	}
+
+	// Child span: format conversion.
+	_, fmtSpan := otel.Tracer("gridctl.gateway").Start(ctx, "mcp.format_conversion")
+	fmtSpan.SetAttributes(
+		attribute.String("server.name", serverName),
+		attribute.String("output.format", outputFormat),
+	)
+	defer fmtSpan.End()
 
 	g.mu.RLock()
 	counter := g.tokenCounter
