@@ -6,6 +6,7 @@ import { PopoutButton } from '../ui/PopoutButton';
 import { ZoomControls } from '../log/ZoomControls';
 import { useUIStore } from '../../stores/useUIStore';
 import { useTracesStore } from '../../stores/useTracesStore';
+import { useStackStore } from '../../stores/useStackStore';
 import { useWindowManager } from '../../hooks/useWindowManager';
 import { useTextZoom } from '../../hooks/useTextZoom';
 import { TraceWaterfall } from './TraceWaterfall';
@@ -92,11 +93,9 @@ export function TracesTab() {
     load();
   }, [filters, load, isVisible]);
 
-  // Unique server list from traces
-  const servers = useMemo(() => {
-    const set = new Set(traces.map((t) => t.server).filter(Boolean));
-    return Array.from(set).sort();
-  }, [traces]);
+  // Server list from deployed MCP servers (always populated when gateway is connected)
+  const mcpServers = useStackStore((s) => s.mcpServers);
+  const servers = useMemo(() => mcpServers.map((s) => s.name).sort(), [mcpServers]);
 
   // Client-side search filter
   const filteredTraces = useMemo(() => {
