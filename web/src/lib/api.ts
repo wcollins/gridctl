@@ -706,6 +706,75 @@ export async function fetchSkillUpdates(): Promise<UpdateSummary> {
   return fetchJSON<UpdateSummary>('/api/skills/updates');
 }
 
+// === Traces API ===
+
+export interface TraceSummary {
+  traceId: string;
+  rootSpanId: string;
+  operation: string;
+  server: string;
+  startTime: string;
+  duration: number;
+  spanCount: number;
+  hasError: boolean;
+  status: 'ok' | 'error';
+}
+
+export interface TraceListResponse {
+  traces: TraceSummary[];
+  total: number;
+}
+
+export interface SpanEvent {
+  name: string;
+  timestamp: string;
+  attributes: Record<string, string>;
+}
+
+export interface Span {
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  status: 'ok' | 'error';
+  attributes: Record<string, string>;
+  events: SpanEvent[];
+}
+
+export interface TraceDetail {
+  traceId: string;
+  spans: Span[];
+}
+
+/**
+ * Fetch list of recent traces with optional filters
+ * GET /api/traces
+ */
+export async function fetchTraces(params?: {
+  server?: string;
+  errors?: boolean;
+  minDuration?: number;
+  limit?: number;
+}): Promise<TraceListResponse> {
+  const query = new URLSearchParams();
+  if (params?.server) query.set('server', params.server);
+  if (params?.errors) query.set('errors', 'true');
+  if (params?.minDuration != null) query.set('minDuration', String(params.minDuration));
+  if (params?.limit != null) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return fetchJSON<TraceListResponse>(`/api/traces${qs ? `?${qs}` : ''}`);
+}
+
+/**
+ * Fetch full trace detail including all spans
+ * GET /api/traces/{traceId}
+ */
+export async function fetchTraceDetail(traceId: string): Promise<TraceDetail> {
+  return fetchJSON<TraceDetail>(`/api/traces/${encodeURIComponent(traceId)}`);
+}
+
 // === JSON-RPC Helper (for MCP protocol calls) ===
 
 interface JSONRPCRequest {
