@@ -301,5 +301,16 @@ func buildTraceRecord(root SpanRecord, allSpans []SpanRecord) TraceRecord {
 		}
 	}
 
+	// server.name is set on child spans (e.g. mcp.routing, mcp.client.call_tool),
+	// not the root span. Fall through to child spans when root doesn't have it.
+	if tr.ServerName == "" {
+		for _, sp := range allSpans {
+			if v, ok := sp.Attrs["server.name"]; ok {
+				tr.ServerName = v
+				break
+			}
+		}
+	}
+
 	return tr
 }
