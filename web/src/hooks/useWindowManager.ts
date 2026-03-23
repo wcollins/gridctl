@@ -10,9 +10,10 @@ const WINDOW_TITLES: Record<string, string> = {
   workflow: 'Gridctl - Workflow Designer',
   metrics: 'Gridctl - Metrics',
   vault: 'Gridctl - Vault',
+  traces: 'Gridctl - Traces',
 };
 
-type DetachableWindow = 'logs' | 'sidebar' | 'editor' | 'registry' | 'workflow' | 'metrics' | 'vault';
+type DetachableWindow = 'logs' | 'sidebar' | 'editor' | 'registry' | 'workflow' | 'metrics' | 'vault' | 'traces';
 
 export function useWindowManager() {
   const windowRefs = useRef<Map<string, Window | null>>(new Map());
@@ -24,6 +25,7 @@ export function useWindowManager() {
   const setWorkflowDetached = useUIStore((s) => s.setWorkflowDetached);
   const setMetricsDetached = useUIStore((s) => s.setMetricsDetached);
   const setVaultDetached = useUIStore((s) => s.setVaultDetached);
+  const setTracesDetached = useUIStore((s) => s.setTracesDetached);
   const setBottomPanelOpen = useUIStore((s) => s.setBottomPanelOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
 
@@ -50,6 +52,8 @@ export function useWindowManager() {
           setMetricsDetached(true);
         } else if (payload?.windowType === 'vault') {
           setVaultDetached(true);
+        } else if (payload?.windowType === 'traces') {
+          setTracesDetached(true);
         }
       } else if (message.type === 'WINDOW_CLOSED') {
         if (payload?.windowType === 'logs') {
@@ -66,11 +70,13 @@ export function useWindowManager() {
           setMetricsDetached(false);
         } else if (payload?.windowType === 'vault') {
           setVaultDetached(false);
+        } else if (payload?.windowType === 'traces') {
+          setTracesDetached(false);
         }
         windowRefs.current.delete(payload?.windowType ?? '');
       }
     }
-  }, [setLogsDetached, setSidebarDetached, setEditorDetached, setRegistryDetached, setWorkflowDetached, setMetricsDetached, setVaultDetached, setBottomPanelOpen, setSidebarOpen]);
+  }, [setLogsDetached, setSidebarDetached, setEditorDetached, setRegistryDetached, setWorkflowDetached, setMetricsDetached, setVaultDetached, setTracesDetached, setBottomPanelOpen, setSidebarOpen]);
 
   const { postMessage } = useBroadcastChannel({
     onMessage: handleMessage,
@@ -103,6 +109,8 @@ export function useWindowManager() {
       setMetricsDetached(true);
     } else if (type === 'vault') {
       setVaultDetached(true);
+    } else if (type === 'traces') {
+      setTracesDetached(true);
     }
 
     const url = params ? `/${type}?${params}` : `/${type}`;
@@ -135,11 +143,13 @@ export function useWindowManager() {
             setMetricsDetached(false);
           } else if (type === 'vault') {
             setVaultDetached(false);
+          } else if (type === 'traces') {
+            setTracesDetached(false);
           }
         }
       }, 500);
     }
-  }, [setLogsDetached, setSidebarDetached, setEditorDetached, setRegistryDetached, setWorkflowDetached, setMetricsDetached, setVaultDetached, setBottomPanelOpen, setSidebarOpen]);
+  }, [setLogsDetached, setSidebarDetached, setEditorDetached, setRegistryDetached, setWorkflowDetached, setMetricsDetached, setVaultDetached, setTracesDetached, setBottomPanelOpen, setSidebarOpen]);
 
   // Close a detached window
   const closeDetachedWindow = useCallback((type: DetachableWindow) => {
