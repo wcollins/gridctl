@@ -13,7 +13,7 @@ import { IconButton } from '../components/ui/IconButton';
 import { ZoomControls } from '../components/log/ZoomControls';
 import { useDetachedWindowSync } from '../hooks/useBroadcastChannel';
 import { useTextZoom } from '../hooks/useTextZoom';
-import { fetchTraces, fetchTraceDetail } from '../lib/api';
+import { fetchTraces, fetchTraceDetail, fetchMCPServers } from '../lib/api';
 import type { TraceSummary, TraceDetail } from '../lib/api';
 import { TraceWaterfall } from '../components/traces/TraceWaterfall';
 import { POLLING } from '../lib/constants';
@@ -84,6 +84,7 @@ function DetachedTracesPageContent() {
   const [traceDetail, setTraceDetail] = useState<TraceDetail | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [serverFilter, setServerFilter] = useState('');
+  const [servers, setServers] = useState<string[]>([]);
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -127,6 +128,13 @@ function DetachedTracesPageContent() {
     return () => clearInterval(interval);
   }, [load]);
 
+  // Load deployed server names for the filter dropdown
+  useEffect(() => {
+    fetchMCPServers()
+      .then((list) => setServers(list.map((s) => s.name).sort()))
+      .catch(() => {});
+  }, []);
+
   const selectTrace = useCallback(async (traceId: string | null) => {
     setSelectedTraceId(traceId);
     setTraceDetail(null);
@@ -157,8 +165,6 @@ function DetachedTracesPageContent() {
     document.addEventListener('fullscreenchange', handler);
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
-
-  const servers = Array.from(new Set(traces.map((t) => t.server).filter(Boolean))).sort();
 
   const filteredTraces = search
     ? traces.filter(
