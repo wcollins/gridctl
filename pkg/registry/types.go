@@ -29,6 +29,10 @@ type AgentSkill struct {
 	Compatibility string            `yaml:"compatibility,omitempty" json:"compatibility,omitempty"`
 	Metadata      map[string]string `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 	AllowedTools  string            `yaml:"allowed-tools,omitempty" json:"allowedTools,omitempty"`
+	// AcceptanceCriteria documents expected skill behavior as human-readable
+	// Given/When/Then scenarios. Gridctl extension; not part of agentskills.io spec.
+	// See https://agentskills.io/specification
+	AcceptanceCriteria []string `yaml:"acceptance_criteria,omitempty" json:"acceptanceCriteria,omitempty"`
 
 	// --- Gridctl extensions (not in agentskills.io spec) ---
 	State ItemState `yaml:"state,omitempty" json:"state"`
