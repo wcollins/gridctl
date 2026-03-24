@@ -17,6 +17,9 @@ const (
 	maxBodyLines         = 500
 	maxBodyTokens        = 5000
 	bytesPerToken        = 4
+
+	// WarnNoAcceptanceCriteria is the warning emitted for executable skills with no acceptance criteria.
+	WarnNoAcceptanceCriteria = "executable skill has no acceptance criteria defined"
 )
 
 // ValidationResult contains errors and warnings from skill validation.
@@ -90,6 +93,11 @@ func ValidateSkillFull(s *AgentSkill) *ValidationResult {
 			result.Warnings = append(result.Warnings,
 				fmt.Sprintf("body exceeds estimated %d tokens (~%d)", maxBodyTokens, estimatedTokens))
 		}
+	}
+
+	// Warn if executable skill has no acceptance criteria (advisory only)
+	if s.IsExecutable() && len(s.AcceptanceCriteria) == 0 {
+		result.Warnings = append(result.Warnings, WarnNoAcceptanceCriteria)
 	}
 
 	return result
