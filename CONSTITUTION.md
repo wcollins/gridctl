@@ -18,7 +18,7 @@ All exported functions and methods MUST have corresponding tests before a PR is 
 
 ## Article IV — No Mocks in Integration Tests
 
-Integration tests MUST exercise real dependencies — real Docker clients, real containers, real network connections. Mocks MUST NOT be used in `tests/integration/`. A passing integration test suite with mocked dependencies provides false assurance. Unit tests may use mocks; integration tests MUST NOT.
+Integration tests MUST exercise real dependencies — real Docker clients, real containers, real network connections. Mocks MUST NOT be used in `tests/integration/`. A passing integration test suite with mocked dependencies provides false assurance. Unit tests may use mocks; integration tests MUST NOT. All integration tests MUST run with the `-race` flag; a test suite that passes without race detection is not a complete integration test.
 
 ## Article V — Error Propagation, Not Panic
 

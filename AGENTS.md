@@ -823,6 +823,7 @@ Steps with a false condition are skipped along with their dependents.
 - Context: pass context.Context for cancellation
 - Testing: table-driven tests preferred
 - Interfaces: define interfaces for external dependencies (like Docker) to enable mocking
+- Documentation: all exported functions, types, and methods MUST have a godoc comment
 
 ### TypeScript/React
 
@@ -869,6 +870,10 @@ Generated mocks (via `go.uber.org/mock/mockgen`, regenerate with `make generate`
 Hand-rolled mocks (state-based fakes):
 - `MockDockerClient`: pkg/runtime/docker/mock_test.go (fake with state, error injection, call tracking)
 - HTTP handlers: use `net/http/httptest`
+
+### Test Cleanup
+
+Tests MUST leave the system in a clean state. Use `t.Cleanup()` or `defer` to remove any files, containers, or resources created during a test. A test that leaves behind state can cause non-deterministic failures in subsequent runs.
 
 ### Running Tests
 
