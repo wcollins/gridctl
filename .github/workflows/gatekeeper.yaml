@@ -55,6 +55,27 @@ jobs:
       - name: Build Go binary
         run: make build-go
 
+      - name: Validate example stacks
+        run: |
+          # Add example stack YAML files under examples/ to have them validated here.
+          # Exit codes: 0=valid, 1=errors (fail), 2=warnings only (pass)
+          mapfile -t files < <(find examples -name "*.yaml" | sort)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No example stacks found, skipping validation"
+            exit 0
+          fi
+          failed=0
+          for f in "${files[@]}"; do
+            echo "Validating $f..."
+            go run ./cmd/gridctl validate "$f"
+            rc=$?
+            if [ $rc -eq 1 ]; then
+              echo "  FAILED: $f"
+              failed=1
+            fi
+          done
+          exit $failed
+
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10
