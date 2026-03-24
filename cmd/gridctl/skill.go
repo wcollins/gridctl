@@ -103,6 +103,16 @@ var skillInfoCmd = &cobra.Command{
 	},
 }
 
+var skillValidateCmd = &cobra.Command{
+	Use:   "validate <name>",
+	Short: "Validate a skill definition",
+	Long:  "Validate a skill's definition and display errors and warnings, including missing acceptance criteria.",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSkillValidate(args[0])
+	},
+}
+
 var skillTryCmd = &cobra.Command{
 	Use:   "try <repo-url>",
 	Short: "Temporarily import a skill",
@@ -135,6 +145,7 @@ func init() {
 	skillCmd.AddCommand(skillRemoveCmd)
 	skillCmd.AddCommand(skillPinCmd)
 	skillCmd.AddCommand(skillInfoCmd)
+	skillCmd.AddCommand(skillValidateCmd)
 	skillCmd.AddCommand(skillTryCmd)
 }
 
@@ -380,19 +391,58 @@ func runSkillInfo(name string) error {
 
 	if !info.IsRemote {
 		printer.Info("Local skill", "name", info.Name)
-		return nil
+	} else {
+		printer.Info("Remote skill",
+			"name", info.Name,
+			"repo", info.Origin.Repo,
+			"ref", info.Origin.Ref,
+			"commit", info.Origin.CommitSHA[:8],
+			"imported", info.Origin.ImportedAt.Format(time.RFC3339),
+		)
+
+		if !info.LastChecked.IsZero() {
+			fmt.Printf("  Last checked: %s\n", info.LastChecked.Format(time.RFC3339))
+		}
 	}
 
-	printer.Info("Remote skill",
-		"name", info.Name,
-		"repo", info.Origin.Repo,
-		"ref", info.Origin.Ref,
-		"commit", info.Origin.CommitSHA[:8],
-		"imported", info.Origin.ImportedAt.Format(time.RFC3339),
-	)
+	if sk, err := store.GetSkill(name); err == nil && len(sk.AcceptanceCriteria) > 0 {
+		fmt.Println("\nAcceptance Criteria:")
+		for i, c := range sk.AcceptanceCriteria {
+			fmt.Printf("  %d. %s\n", i+1, c)
+		}
+	}
 
-	if !info.LastChecked.IsZero() {
-		fmt.Printf("  Last checked: %s\n", info.LastChecked.Format(time.RFC3339))
+	return nil
+}
+
+func runSkillValidate(name string) error {
+	store, err := loadRegistry()
+	if err != nil {
+		return err
+	}
+
+	sk, err := store.GetSkill(name)
+	if err != nil {
+		return err
+	}
+
+	result := registry.ValidateSkillFull(sk)
+
+	if !result.Valid() {
+		for _, e := range result.Errors {
+			fmt.Printf("  ✗ %s: %s\n", name, e)
+		}
+	}
+
+	for _, w := range result.Warnings {
+		fmt.Printf("⚠  %s: %s\n", name, w)
+		if w == registry.WarnNoAcceptanceCriteria {
+			fmt.Printf("   Add acceptance_criteria: [...] to the skill frontmatter to document expected behavior\n")
+		}
+	}
+
+	if result.Valid() && len(result.Warnings) == 0 {
+		fmt.Printf("✓ %s is valid\n", name)
 	}
 
 	return nil

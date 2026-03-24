@@ -593,6 +593,60 @@ func TestValidateSkillFull_MissingToolReference(t *testing.T) {
 	}
 }
 
+func TestValidateSkillFull_ExecutableNoCriteriaWarning(t *testing.T) {
+	skill := &AgentSkill{
+		Name:        "no-criteria",
+		Description: "An executable skill with no acceptance criteria",
+		Workflow: []WorkflowStep{
+			{ID: "step-a", Tool: "server__tool"},
+		},
+	}
+
+	result := ValidateSkillFull(skill)
+	if !result.Valid() {
+		t.Errorf("expected valid (warning only), got errors: %v", result.Errors)
+	}
+	if !containsSubstring(result.Warnings, WarnNoAcceptanceCriteria) {
+		t.Errorf("expected acceptance criteria warning, got warnings: %v", result.Warnings)
+	}
+}
+
+func TestValidateSkillFull_ExecutableWithCriteriaNoWarning(t *testing.T) {
+	skill := &AgentSkill{
+		Name:        "with-criteria",
+		Description: "An executable skill with acceptance criteria",
+		Workflow: []WorkflowStep{
+			{ID: "step-a", Tool: "server__tool"},
+		},
+		AcceptanceCriteria: []string{
+			"Given a valid input, When executed, Then it succeeds",
+		},
+	}
+
+	result := ValidateSkillFull(skill)
+	if !result.Valid() {
+		t.Errorf("expected valid, got errors: %v", result.Errors)
+	}
+	if containsSubstring(result.Warnings, "acceptance criteria") {
+		t.Errorf("unexpected acceptance criteria warning: %v", result.Warnings)
+	}
+}
+
+func TestValidateSkillFull_NonExecutableNoCriteriaNoWarning(t *testing.T) {
+	skill := &AgentSkill{
+		Name:        "non-executable",
+		Description: "A documentation-only skill with no workflow",
+	}
+
+	result := ValidateSkillFull(skill)
+	if !result.Valid() {
+		t.Errorf("expected valid, got errors: %v", result.Errors)
+	}
+	if containsSubstring(result.Warnings, "acceptance criteria") {
+		t.Errorf("unexpected acceptance criteria warning for non-executable skill: %v", result.Warnings)
+	}
+}
+
 // containsSubstring checks if any string in the slice contains the given substring.
 func containsSubstring(strs []string, sub string) bool {
 	for _, s := range strs {
