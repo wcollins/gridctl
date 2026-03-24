@@ -880,6 +880,8 @@ go test -tags=integration ./tests/integration/...  # Integration tests
 
 ## Important Notes
 
+See [CONSTITUTION.md](CONSTITUTION.md) for the immutable governance articles that apply to all contributions and cannot be overridden by any feature, prompt, or contributor preference.
+
 - Never commit API keys or secrets
 - Keep dependencies minimal
 - Prefer simple solutions over clever ones
