@@ -17,6 +17,7 @@ import (
 	"github.com/gridctl/gridctl/pkg/logging"
 	"github.com/gridctl/gridctl/pkg/mcp"
 	"github.com/gridctl/gridctl/pkg/metrics"
+	"github.com/gridctl/gridctl/pkg/pins"
 	"github.com/gridctl/gridctl/pkg/provisioner"
 	"github.com/gridctl/gridctl/pkg/registry"
 	"github.com/gridctl/gridctl/pkg/reload"
@@ -44,6 +45,7 @@ type Server struct {
 	provisioners   *provisioner.Registry
 	linkServerName string
 	registryServer *registry.Server
+	pinStore           *pins.PinStore
 	vaultStore         *vault.Store
 	metricsAccumulator *metrics.Accumulator
 	traceBuffer        *tracing.Buffer
@@ -129,6 +131,11 @@ func (s *Server) SetRegistryServer(r *registry.Server) {
 	s.registryServer = r
 }
 
+// SetPinStore sets the pin store for schema pin management.
+func (s *Server) SetPinStore(ps *pins.PinStore) {
+	s.pinStore = ps
+}
+
 // SetVaultStore sets the vault store for secrets management.
 func (s *Server) SetVaultStore(v *vault.Store) {
 	s.vaultStore = v
@@ -204,6 +211,10 @@ func (s *Server) Handler() http.Handler {
 
 	// Agent control endpoints (pattern: /api/agents/{name}/action)
 	mux.HandleFunc("/api/agents/", s.handleAgentAction)
+
+	// Pins endpoints
+	mux.HandleFunc("/api/pins/", s.handlePins)
+	mux.HandleFunc("/api/pins", s.handlePins)
 
 	// Vault endpoints
 	mux.HandleFunc("/api/vault/", s.handleVault)
