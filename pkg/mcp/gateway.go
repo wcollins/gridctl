@@ -205,6 +205,23 @@ func (g *Gateway) SetSchemaVerifier(sv SchemaVerifier, action string) {
 	}
 }
 
+// ResetServerPins clears the stored pin record for serverName, if the wired
+// SchemaVerifier also implements PinResetter. Called before re-registering a
+// modified server during hot reload so the next VerifyOrPin re-pins from scratch
+// rather than flagging config-driven tool changes as drift.
+func (g *Gateway) ResetServerPins(serverName string) error {
+	g.mu.RLock()
+	sv := g.schemaVerifier
+	g.mu.RUnlock()
+	if sv == nil {
+		return nil
+	}
+	if r, ok := sv.(PinResetter); ok {
+		return r.ResetServerPins(serverName)
+	}
+	return nil
+}
+
 // UnblockServer clears the block on a server that was blocked due to schema drift.
 // Called by the approve flow after the user accepts the updated tool definitions.
 func (g *Gateway) UnblockServer(serverName string) {
