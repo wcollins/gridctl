@@ -81,6 +81,25 @@ type GatewayConfig struct {
 
 	// Tracing configures distributed tracing. When nil, tracing is enabled with defaults.
 	Tracing *TracingConfig `yaml:"tracing,omitempty" json:"tracing,omitempty"`
+
+	// Security configures security features such as schema pinning. When nil, defaults apply.
+	Security *GatewaySecurityConfig `yaml:"security,omitempty" json:"security,omitempty"`
+}
+
+// GatewaySecurityConfig holds gateway-level security settings.
+type GatewaySecurityConfig struct {
+	// SchemaPinning configures TOFU schema pinning for MCP tool definitions.
+	SchemaPinning *SchemaPinningConfig `yaml:"schema_pinning,omitempty" json:"schema_pinning,omitempty"`
+}
+
+// SchemaPinningConfig controls the schema pinning feature.
+type SchemaPinningConfig struct {
+	// Enabled controls whether schema pinning is active. Default: true.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// Action is the response when drift is detected: "warn" (default) or "block".
+	// warn: log a structured diff and continue serving.
+	// block: reject all tool calls from the drifted server until approved.
+	Action string `yaml:"action,omitempty" json:"action,omitempty"`
 }
 
 // AuthConfig configures gateway authentication.
@@ -115,7 +134,8 @@ type MCPServer struct {
 	SSH       *SSHConfig        `yaml:"ssh,omitempty"`       // SSH connection config for remote servers
 	OpenAPI   *OpenAPIConfig    `yaml:"openapi,omitempty"`   // OpenAPI spec config for API-backed servers
 	Tools        []string          `yaml:"tools,omitempty"`          // Tool whitelist (empty = all tools exposed)
-	OutputFormat string            `yaml:"output_format,omitempty"` // Output format override: "json", "toon", "csv", "text"
+	OutputFormat string            `yaml:"output_format,omitempty"`  // Output format override: "json", "toon", "csv", "text"
+	PinSchemas   *bool             `yaml:"pin_schemas,omitempty"`    // Override gateway schema pinning for this server (nil = inherit)
 }
 
 // OpenAPIConfig defines an MCP server backed by an OpenAPI specification.
