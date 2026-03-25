@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -39,16 +38,10 @@ type PinStore struct {
 func New(stackName string) *PinStore {
 	ps := &PinStore{
 		stackName: stackName,
-		path:      pinsPath(stackName),
+		path:      state.PinsPath(stackName),
 	}
 	ps.data = ps.emptyPinFile()
 	return ps
-}
-
-// pinsPath returns the path to the pin file for a stack.
-// Phase 2 adds state.PinsPath() — this helper bridges the gap.
-func pinsPath(stackName string) string {
-	return filepath.Join(state.BaseDir(), "pins", stackName+".json")
 }
 
 // Load reads the pin file from disk into memory.
@@ -339,8 +332,7 @@ func (ps *PinStore) buildVerifyResult(serverName string, sp *ServerPins, tools [
 // saveLocked writes the pin file atomically. Creates the directory on first write.
 // Caller must hold ps.mu.Lock().
 func (ps *PinStore) saveLocked() error {
-	dir := filepath.Dir(ps.path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(state.PinsDir(), 0755); err != nil {
 		return fmt.Errorf("pins: creating pins directory: %w", err)
 	}
 
@@ -394,6 +386,8 @@ func hashTool(t mcp.Tool) (string, error) {
 // canonicalSchema produces a deterministic JSON string from a json.RawMessage
 // by unmarshaling, recursively sorting all object keys, and re-marshaling.
 // Go's encoding/json guarantees alphabetical key ordering when marshaling map[string]any.
+// Empty, null, and {} inputs all normalize to "{}" to prevent false drifts between
+// servers that omit inputSchema vs. those that send an empty object.
 func canonicalSchema(raw json.RawMessage) (string, error) {
 	if len(raw) == 0 {
 		return "{}", nil
@@ -401,6 +395,13 @@ func canonicalSchema(raw json.RawMessage) (string, error) {
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return "", fmt.Errorf("pins: parsing inputSchema: %w", err)
+	}
+	// Normalize null and empty object to "{}" for consistency.
+	if v == nil {
+		return "{}", nil
+	}
+	if m, ok := v.(map[string]any); ok && len(m) == 0 {
+		return "{}", nil
 	}
 	out, err := json.Marshal(sortKeys(v))
 	if err != nil {
