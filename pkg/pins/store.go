@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -39,6 +40,17 @@ func New(stackName string) *PinStore {
 	ps := &PinStore{
 		stackName: stackName,
 		path:      state.PinsPath(stackName),
+	}
+	ps.data = ps.emptyPinFile()
+	return ps
+}
+
+// NewWithPath creates a PinStore that stores pins in dir/{stackName}.json.
+// Intended for testing where the real state directory should not be used.
+func NewWithPath(dir, stackName string) *PinStore {
+	ps := &PinStore{
+		stackName: stackName,
+		path:      filepath.Join(dir, stackName+".json"),
 	}
 	ps.data = ps.emptyPinFile()
 	return ps
