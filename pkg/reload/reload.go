@@ -171,6 +171,11 @@ func (h *Handler) applyMCPServerChanges(ctx context.Context, diff MCPServerDiff,
 		// Unregister from gateway
 		h.gateway.UnregisterMCPServer(server.Name)
 
+		// Clear stored pins so a future re-add of the same server name starts fresh.
+		if err := h.gateway.ResetServerPins(server.Name); err != nil {
+			h.logger.Warn("failed to reset schema pins for removed server", "name", server.Name, "error", err)
+		}
+
 		// Stop and remove container if it exists
 		if !server.IsExternal() && !server.IsLocalProcess() && !server.IsSSH() && !server.IsOpenAPI() {
 			containerName := containerName(h.currentCfg.Name, server.Name)
@@ -196,6 +201,12 @@ func (h *Handler) applyMCPServerChanges(ctx context.Context, diff MCPServerDiff,
 			if err := h.stopAndRemoveContainer(ctx, containerName); err != nil {
 				h.logger.Warn("failed to stop container", "name", change.Name, "error", err)
 			}
+		}
+
+		// Clear stale pins: the server config changed, so existing pins are invalid.
+		// The next RegisterMCPServer call will re-pin the new tool definitions from scratch.
+		if err := h.gateway.ResetServerPins(change.Name); err != nil {
+			h.logger.Warn("failed to reset schema pins for modified server", "name", change.Name, "error", err)
 		}
 
 		// Start new server
