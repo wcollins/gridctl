@@ -640,6 +640,96 @@ When the vault is locked, all endpoints except `status`, `unlock`, and `lock` re
 
 ---
 
+### Schema Pins
+
+Inspect and manage TOFU schema pins for MCP servers. Pins protect against rug pull attacks by detecting when an MCP server silently modifies its tool definitions. The pin store is automatically updated on deploy; these endpoints are for inspection and remediation.
+
+#### `GET /api/pins`
+
+Returns pin records for all servers in the deployed stack.
+
+**Auth:** Yes
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8180/api/pins
+```
+
+**Response:**
+```json
+{
+  "github": {
+    "server_hash": "abc123...",
+    "pinned_at": "2026-03-24T09:14:22Z",
+    "last_verified_at": "2026-03-24T09:14:22Z",
+    "tool_count": 23,
+    "status": "pinned",
+    "tools": {
+      "github__create_pull_request": {
+        "hash": "def456...",
+        "name": "github__create_pull_request",
+        "pinned_at": "2026-03-24T09:14:22Z"
+      }
+    }
+  }
+}
+```
+
+**Status values:** `"pinned"` | `"drift"` | `"approved_pending_redeploy"`
+
+Returns `503` if the pin store is not available (schema pinning disabled globally).
+
+#### `GET /api/pins/{server}`
+
+Returns the pin record for a specific server.
+
+**Auth:** Yes
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8180/api/pins/github
+```
+
+Returns `404` if no pins exist for that server.
+
+#### `POST /api/pins/{server}/approve`
+
+Re-pins the current live tool definitions for a server, clearing drift status. Fetches tools directly from the running gateway router.
+
+**Auth:** Yes
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8180/api/pins/github/approve
+```
+
+**Response:**
+```json
+{
+  "server": "github",
+  "tool_count": 23,
+  "status": "approved"
+}
+```
+
+**Errors:**
+- `404` — No pins found for that server, or server not found in gateway
+- `503` — Pin store not available
+
+#### `DELETE /api/pins/{server}`
+
+Deletes the pin record for a server. The server will be re-pinned on the next deploy.
+
+**Auth:** Yes
+
+```bash
+curl -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:8180/api/pins/github
+```
+
+**Response:** `204 No Content`
+
+**Errors:**
+- `404` — No pins found for that server
+
+---
+
 ### Registry (Agent Skills) *(experimental)*
 
 Manage reusable skills stored as SKILL.md files. Skills have three lifecycle states: `draft`, `active`, and `disabled`.

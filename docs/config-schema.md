@@ -57,6 +57,7 @@ gateway:
 | `code_mode` | string | No | `"off"` | Enable code mode: `"on"` or `"off"` *(experimental)* |
 | `code_mode_timeout` | int | No | `30` | Code mode execution timeout in seconds. Must be >= 0 *(experimental)* |
 | `output_format` | string | No | `"json"` | Default output format for tool call results: `"json"`, `"toon"`, `"csv"`, or `"text"`. Per-server `output_format` overrides this value |
+| `security` | object | No | — | Security settings (see [Security](#security)) |
 
 ### Auth
 
@@ -78,6 +79,33 @@ gateway:
 **Constraints:**
 - `header` can only be set when `type` is `"api_key"`
 - Token comparison uses constant-time equality to prevent timing attacks
+
+### Security
+
+Optional gateway-level security settings.
+
+```yaml
+gateway:
+  security:
+    schema_pinning:
+      enabled: true
+      action: warn
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `schema_pinning` | object | No | — | TOFU schema pinning configuration |
+
+**Schema Pinning:**
+
+Protects against rug pull attacks (CVE-2025-54136 class) by hashing tool definitions on first connect and verifying them on every subsequent reconnect or reload.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enabled` | bool | No | `true` | Enable schema pinning globally for the stack |
+| `action` | string | No | `"warn"` | Drift response: `"warn"` logs the diff and continues; `"block"` rejects tool calls from the drifted server until approved |
+
+Pin files are stored in `~/.gridctl/pins/{stackName}.json`. Use `gridctl pins` subcommands to inspect, approve, or reset pins. Per-server opt-out is available via the `pin_schemas: false` field on any `mcp-servers` entry.
 
 ---
 
@@ -241,6 +269,7 @@ mcp-servers:
 | `openapi` | object | Conditional | — | OpenAPI spec config (see [OpenAPI](#openapi)) |
 | `tools` | []string | No | — | Tool whitelist. Empty exposes all tools |
 | `output_format` | string | No | — | Output format override: `"json"`, `"toon"`, `"csv"`, or `"text"`. Overrides `gateway.output_format` for this server |
+| `pin_schemas` | bool | No | — | Override schema pinning for this server. `false` disables pinning regardless of gateway setting. Omit to inherit from `gateway.security.schema_pinning.enabled` |
 
 **Type determination rules:**
 - Must have exactly one of: `image`, `source`, `url`, `command` (alone), `ssh` + `command`, or `openapi`
