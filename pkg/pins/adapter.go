@@ -16,6 +16,12 @@ func NewGatewayAdapter(ps *PinStore) *GatewayAdapter {
 	return &GatewayAdapter{store: ps}
 }
 
+// ResetServerPins implements mcp.PinResetter.
+// It deletes the pin record for serverName so the next VerifyOrPin re-pins from scratch.
+func (a *GatewayAdapter) ResetServerPins(serverName string) error {
+	return a.store.Reset(serverName)
+}
+
 // VerifyOrPin implements mcp.SchemaVerifier.
 // It delegates to PinStore.VerifyOrPin and converts the result into the
 // mcp.SchemaDrift slice that the gateway consumes.
