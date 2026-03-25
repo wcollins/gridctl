@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gridctl/gridctl/pkg/output"
+	"github.com/gridctl/gridctl/pkg/pins"
 	"github.com/gridctl/gridctl/pkg/runtime"
 	_ "github.com/gridctl/gridctl/pkg/runtime/docker" // Register DockerRuntime factory
 	"github.com/gridctl/gridctl/pkg/state"
@@ -72,6 +74,9 @@ func runStatus(stack string) error {
 		gateways = append(gateways, gw)
 	}
 
+	// Load pin status for all filtered stacks (best-effort; errors are non-fatal).
+	pinLabels := loadPinLabels(filteredStates)
+
 	// Show container status (graceful degradation when Docker unavailable)
 	var containers []output.ContainerSummary
 	rt, err := runtime.New()
@@ -102,12 +107,13 @@ func runStatus(stack string) error {
 					id = id[:12]
 				}
 				containers = append(containers, output.ContainerSummary{
-					ID:      id,
-					Name:    workloadName,
-					Type:    string(s.Type),
-					Image:   s.Image,
-					State:   string(s.State),
-					Message: s.Message,
+					ID:        id,
+					Name:      workloadName,
+					Type:      string(s.Type),
+					Image:     s.Image,
+					State:     string(s.State),
+					Message:   s.Message,
+					PinStatus: pinLabels[workloadName],
 				})
 			}
 		}
@@ -167,6 +173,24 @@ func queryCodeMode(port int) string {
 		return status.CodeMode
 	}
 	return ""
+}
+
+// loadPinLabels loads pin status for all provided stacks and returns a map
+// from server name to display label. Errors are logged and silently ignored
+// so pin status is always best-effort and never blocks the status command.
+func loadPinLabels(states []state.DaemonState) map[string]string {
+	labels := make(map[string]string)
+	for _, s := range states {
+		ps := pins.New(s.StackName)
+		if err := ps.Load(); err != nil {
+			slog.Debug("status: could not load pins", "stack", s.StackName, "error", err)
+			continue
+		}
+		for name, sp := range ps.GetAll() {
+			labels[name] = pinStatusLabel(sp.Status)
+		}
+	}
+	return labels
 }
 
 // formatDuration formats a duration in human-readable form
