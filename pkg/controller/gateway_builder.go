@@ -19,6 +19,7 @@ import (
 	"github.com/gridctl/gridctl/pkg/logging"
 	"github.com/gridctl/gridctl/pkg/mcp"
 	"github.com/gridctl/gridctl/pkg/metrics"
+	"github.com/gridctl/gridctl/pkg/pins"
 	"github.com/gridctl/gridctl/pkg/provisioner"
 	"github.com/gridctl/gridctl/pkg/registry"
 	"github.com/gridctl/gridctl/pkg/reload"
@@ -65,6 +66,9 @@ type GatewayBuilder struct {
 
 	// vaultStore for API server injection and log redaction.
 	vaultStore *vault.Store
+
+	// pinStore for API server injection (schema pin management).
+	pinStore *pins.PinStore
 }
 
 // NewGatewayBuilder creates a GatewayBuilder.
@@ -98,6 +102,11 @@ func (b *GatewayBuilder) SetExistingLogInfra(buffer *logging.LogBuffer, handler 
 // SetVaultStore sets the vault store for API server injection and log redaction.
 func (b *GatewayBuilder) SetVaultStore(v *vault.Store) {
 	b.vaultStore = v
+}
+
+// SetPinStore sets the pin store for API server injection.
+func (b *GatewayBuilder) SetPinStore(ps *pins.PinStore) {
+	b.pinStore = ps
 }
 
 // BuildAndRun constructs the gateway and runs it until shutdown.
@@ -372,6 +381,10 @@ func (b *GatewayBuilder) buildAPIServer(gateway *mcp.Gateway, a2aGateway *a2a.Ga
 
 	if b.vaultStore != nil {
 		server.SetVaultStore(b.vaultStore)
+	}
+
+	if b.pinStore != nil {
+		server.SetPinStore(b.pinStore)
 	}
 
 	// Wire token usage metrics
