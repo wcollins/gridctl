@@ -775,6 +775,72 @@ export async function fetchTraceDetail(traceId: string): Promise<TraceDetail> {
   return fetchJSON<TraceDetail>(`/api/traces/${encodeURIComponent(traceId)}`);
 }
 
+// === Playground API ===
+
+export interface PlaygroundProviderAuth {
+  apiKey: boolean;
+  keyName: string | null;
+  cliPath: string | null;
+}
+
+export interface PlaygroundAuthResponse {
+  providers: Record<string, PlaygroundProviderAuth>;
+  ollama: { reachable: boolean; endpoint: string };
+}
+
+export interface PlaygroundChatRequest {
+  agentId?: string;
+  message: string;
+  sessionId: string;
+  authMode: string;
+  model?: string;
+  ollamaUrl?: string;
+}
+
+export interface PlaygroundChatResponse {
+  sessionId: string;
+  status: string;
+}
+
+/**
+ * Detect available auth methods for each LLM provider
+ * POST /api/playground/auth
+ */
+export async function fetchPlaygroundAuth(): Promise<PlaygroundAuthResponse> {
+  const response = await fetch(`${API_BASE}/api/playground/auth`, {
+    method: 'POST',
+    headers: buildHeaders(),
+  });
+  if (response.status === 401) throw new AuthError('Authentication required');
+  if (!response.ok) throw new Error(`Auth check failed: ${response.status} ${response.statusText}`);
+  return response.json();
+}
+
+/**
+ * Start a playground inference session
+ * POST /api/playground/chat
+ */
+export async function sendPlaygroundChat(req: PlaygroundChatRequest): Promise<PlaygroundChatResponse> {
+  const response = await fetch(`${API_BASE}/api/playground/chat`, {
+    method: 'POST',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(req),
+  });
+  if (response.status === 401) throw new AuthError('Authentication required');
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error || `Chat failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Returns headers needed for streaming fetch (SSE with auth)
+ */
+export function buildStreamHeaders(): Record<string, string> {
+  return buildHeaders();
+}
+
 // === JSON-RPC Helper (for MCP protocol calls) ===
 
 interface JSONRPCRequest {
