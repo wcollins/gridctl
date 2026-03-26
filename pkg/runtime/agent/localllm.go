@@ -45,6 +45,8 @@ func NewLocalLLMClientWithKey(baseURL, model, apiKey string) *LocalLLMClient {
 }
 
 // Stream runs the agentic loop against the configured OpenAI-compatible endpoint.
+// toolTurns contains intermediate assistant tool-use and tool-result messages
+// for the caller to persist to session history for multi-turn continuity.
 func (c *LocalLLMClient) Stream(
 	ctx context.Context,
 	systemPrompt string,
@@ -52,16 +54,22 @@ func (c *LocalLLMClient) Stream(
 	tools []Tool,
 	caller ToolCaller,
 	events chan<- LLMEvent,
-) (string, error) {
+) (string, []Message, error) {
 	messages := historyToOpenAIMessages(systemPrompt, history)
 	oaiTools := convertToolsForOpenAI(tools)
 
-	var finalResponse strings.Builder
+	var totalInputTokens, totalOutputTokens int
+	var toolTurns []Message
 
 	for {
+		var roundText strings.Builder
+
 		params := openai.ChatCompletionNewParams{
 			Model:    c.model,
 			Messages: messages,
+			StreamOptions: openai.ChatCompletionStreamOptionsParam{
+				IncludeUsage: openai.Bool(true),
+			},
 		}
 		if len(oaiTools) > 0 {
 			params.Tools = oaiTools
@@ -75,6 +83,13 @@ func (c *LocalLLMClient) Stream(
 
 		for stream.Next() {
 			chunk := stream.Current()
+
+			// Capture usage from the final streaming chunk (requires IncludeUsage).
+			if chunk.Usage.TotalTokens > 0 {
+				totalInputTokens = int(chunk.Usage.PromptTokens)
+				totalOutputTokens = int(chunk.Usage.CompletionTokens)
+			}
+
 			if len(chunk.Choices) == 0 {
 				continue
 			}
@@ -86,11 +101,11 @@ func (c *LocalLLMClient) Stream(
 
 			// Stream text tokens
 			if delta.Content != "" {
-				finalResponse.WriteString(delta.Content)
+				roundText.WriteString(delta.Content)
 				select {
 				case events <- LLMEvent{Type: EventTypeToken, Data: TokenData{Text: delta.Content}}:
 				case <-ctx.Done():
-					return finalResponse.String(), ctx.Err()
+					return roundText.String(), toolTurns, ctx.Err()
 				}
 			}
 
@@ -112,21 +127,51 @@ func (c *LocalLLMClient) Stream(
 		}
 		if err := stream.Err(); err != nil {
 			if ctx.Err() != nil {
-				return finalResponse.String(), nil
+				return roundText.String(), toolTurns, nil
 			}
 			select {
 			case events <- LLMEvent{Type: EventTypeError, Data: ErrorData{Message: err.Error()}}:
 			default:
 			}
-			return finalResponse.String(), fmt.Errorf("local LLM stream: %w", err)
+			return roundText.String(), toolTurns, fmt.Errorf("local LLM stream: %w", err)
 		}
 
 		if finishReason != "tool_calls" || len(pending) == 0 {
-			break
+			// Final round — emit metrics and return
+			select {
+			case events <- LLMEvent{Type: EventTypeMetrics, Data: MetricsData{
+				TokensIn:  totalInputTokens,
+				TokensOut: totalOutputTokens,
+			}}:
+			default:
+			}
+			select {
+			case events <- LLMEvent{Type: EventTypeDone}:
+			default:
+			}
+			return roundText.String(), toolTurns, nil
 		}
 
-		// Build assistant message with tool calls for history
-		assistantMsg := buildAssistantMessageWithToolCalls(finalResponse.String(), pending)
+		// Persist the assistant tool-use turn using ToolCalls for provider-agnostic storage.
+		// OpenAI tool results are individual messages (no batching needed).
+		toolCallBlocks := make([]ToolCallBlock, 0, len(pending))
+		for i := 0; i < len(pending); i++ {
+			if p, ok := pending[i]; ok {
+				toolCallBlocks = append(toolCallBlocks, ToolCallBlock{
+					ID:        p.id,
+					Name:      p.name,
+					Arguments: p.args.String(),
+				})
+			}
+		}
+		toolTurns = append(toolTurns, Message{
+			Role:      "assistant",
+			Content:   roundText.String(),
+			ToolCalls: toolCallBlocks,
+		})
+
+		// Build assistant message with tool calls for the in-flight messages slice
+		assistantMsg := buildAssistantMessageWithToolCalls(roundText.String(), pending)
 		messages = append(messages, assistantMsg)
 
 		// Execute tool calls and collect results
@@ -148,7 +193,7 @@ func (c *LocalLLMClient) Stream(
 				Input:      args,
 			}}:
 			case <-ctx.Done():
-				return finalResponse.String(), ctx.Err()
+				return roundText.String(), toolTurns, ctx.Err()
 			}
 
 			start := time.Now()
@@ -167,42 +212,56 @@ func (c *LocalLLMClient) Stream(
 				DurationMs: durationMs,
 			}}:
 			case <-ctx.Done():
-				return finalResponse.String(), ctx.Err()
+				return roundText.String(), toolTurns, ctx.Err()
 			}
 
 			messages = append(messages, openai.ToolMessage(output, p.id))
+			toolTurns = append(toolTurns, Message{
+				Role:       "tool",
+				ToolCallID: p.id,
+				Content:    output,
+			})
 		}
 	}
-
-	select {
-	case events <- LLMEvent{Type: EventTypeMetrics, Data: MetricsData{
-		TokensIn:  0, // OpenAI-compatible streaming doesn't always include usage
-		TokensOut: 0,
-	}}:
-	default:
-	}
-	select {
-	case events <- LLMEvent{Type: EventTypeDone}:
-	default:
-	}
-
-	return finalResponse.String(), nil
 }
 
 // Close releases any held resources.
 func (c *LocalLLMClient) Close() error { return nil }
 
 // historyToOpenAIMessages converts history to OpenAI message params with optional system prompt.
+// Tool-use assistant turns are reconstructed from ToolCalls. Tool-result messages map to
+// the OpenAI "tool" role (one message per result — no batching required).
 func historyToOpenAIMessages(systemPrompt string, history []Message) []openai.ChatCompletionMessageParamUnion {
 	var msgs []openai.ChatCompletionMessageParamUnion
 	if systemPrompt != "" {
 		msgs = append(msgs, openai.SystemMessage(systemPrompt))
 	}
 	for _, m := range history {
-		switch m.Role {
-		case "user":
+		switch {
+		case m.Role == "assistant" && len(m.ToolCalls) > 0:
+			toolCalls := make([]openai.ChatCompletionMessageToolCallParam, len(m.ToolCalls))
+			for i, tc := range m.ToolCalls {
+				toolCalls[i] = openai.ChatCompletionMessageToolCallParam{
+					ID: tc.ID,
+					Function: openai.ChatCompletionMessageToolCallFunctionParam{
+						Name:      tc.Name,
+						Arguments: tc.Arguments,
+					},
+				}
+			}
+			var param openai.ChatCompletionAssistantMessageParam
+			if m.Content != "" {
+				param.Content = openai.ChatCompletionAssistantMessageParamContentUnion{
+					OfString: openai.String(m.Content),
+				}
+			}
+			param.ToolCalls = toolCalls
+			msgs = append(msgs, openai.ChatCompletionMessageParamUnion{OfAssistant: &param})
+		case m.Role == "tool":
+			msgs = append(msgs, openai.ToolMessage(m.Content, m.ToolCallID))
+		case m.Role == "user":
 			msgs = append(msgs, openai.UserMessage(m.Content))
-		case "assistant":
+		case m.Role == "assistant":
 			msgs = append(msgs, openai.AssistantMessage(m.Content))
 		}
 	}
