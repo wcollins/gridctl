@@ -17,4 +17,5 @@ export interface PaletteCommand {
   shortcut?: string[];  // e.g., ['Cmd', '0'] for Zoom to fit
   keywords?: string[];  // additional fuzzy match terms
   onSelect: () => void; // action to execute
+  unavailable?: boolean; // show unavailable indicator; toast on select instead of executing
 }
