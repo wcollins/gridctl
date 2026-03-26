@@ -171,11 +171,16 @@ func (s *Server) handlePlaygroundChat(w http.ResponseWriter, r *http.Request) {
 		defer session.FinishInference()
 		defer llmClient.Close()
 
-		finalResponse, err := llmClient.Stream(ctx, systemPrompt, historySnapshot, tools, &gatewayToolCaller{gateway: s.gateway}, session.WriteChan())
+		finalResponse, toolTurns, err := llmClient.Stream(ctx, systemPrompt, historySnapshot, tools, &gatewayToolCaller{gateway: s.gateway}, session.WriteChan())
 		if err != nil && ctx.Err() == nil {
 			// Ensure error is visible via SSE if not already sent
 			session.Send(agent.LLMEvent{Type: agent.EventTypeError, Data: agent.ErrorData{Message: err.Error()}})
 			session.Send(agent.LLMEvent{Type: agent.EventTypeDone})
+		}
+		// Persist intermediate tool-use and tool-result turns first so subsequent
+		// requests see the full conversation context including tool interactions.
+		for _, m := range toolTurns {
+			session.AddTurn(m)
 		}
 		if finalResponse != "" {
 			session.AddMessage("assistant", finalResponse)
