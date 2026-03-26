@@ -4,6 +4,7 @@ import { Search, X, ArrowRight, Clock, Layers } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { useCommandRegistry } from '../../hooks/useCommandRegistry';
 import { useUIStore } from '../../stores/useUIStore';
+import { showToast } from '../ui/Toast';
 import type { PaletteCommand, PaletteSection } from '../../types/palette';
 
 interface CommandPaletteProps {
@@ -90,6 +91,7 @@ function PaletteItem({ command, onSelect, showBadge }: PaletteItemProps) {
         'text-text-secondary transition-colors duration-75',
         'hover:bg-surface-highlight/70',
         '[&[data-selected=true]]:bg-primary/10 [&[data-selected=true]]:text-text-primary',
+        command.unavailable && 'opacity-40',
       )}
     >
       {command.icon && (
@@ -98,8 +100,14 @@ function PaletteItem({ command, onSelect, showBadge }: PaletteItemProps) {
         </span>
       )}
       <span className="flex-1 text-sm truncate">{command.label}</span>
-      {showBadge && <SectionBadge section={command.section} />}
-      {command.shortcut && <ShortcutKeys keys={command.shortcut} />}
+      {command.unavailable ? (
+        <span className="shrink-0 text-[10px] text-text-muted/60 font-mono">unavailable</span>
+      ) : (
+        <>
+          {showBadge && <SectionBadge section={command.section} />}
+          {command.shortcut && <ShortcutKeys keys={command.shortcut} />}
+        </>
+      )}
     </Command.Item>
   );
 }
@@ -179,6 +187,11 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
 
   const handleSelect = useCallback(
     (command: PaletteCommand) => {
+      if (command.unavailable) {
+        showToast('error', `${command.label} is currently unavailable`);
+        handleClose();
+        return;
+      }
       recordUsage(command.id);
       command.onSelect();
       handleClose();
@@ -319,9 +332,11 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
                         "{query || (prefix ? SCOPE_CONFIG[prefix].label : '')}"
                       </span>
                     </p>
-                    <p className="text-xs text-text-muted opacity-70">
+                    <p className="text-xs text-text-muted opacity-70 leading-relaxed">
                       Try <code className="text-primary/80">{'>'}</code> for actions ·{' '}
-                      <code className="text-secondary/80">v:</code> for Vault secrets
+                      <code className="text-secondary/80">v:</code> for Vault ·{' '}
+                      <code className="text-primary/70">t:</code> for Traces ·{' '}
+                      <code className="text-tertiary/70">r:</code> for Registry
                     </p>
                   </div>
                 </Command.Empty>
