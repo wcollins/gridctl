@@ -269,7 +269,6 @@ func TestSanitizeStackSecrets_NilEnv(t *testing.T) {
 	// Should not panic with nil env maps
 	sanitizeStackSecrets(&config.Stack{
 		MCPServers: []config.MCPServer{{Name: "test"}},
-		Agents:     []config.Agent{{Name: "agent"}},
 		Resources:  []config.Resource{{Name: "res"}},
 	})
 }
@@ -277,39 +276,13 @@ func TestSanitizeStackSecrets_NilEnv(t *testing.T) {
 func TestSanitizeStackSecrets_AllTypes(t *testing.T) {
 	stack := &config.Stack{
 		MCPServers: []config.MCPServer{{Name: "srv", Env: map[string]string{"DB_PASSWORD": "pass"}}},
-		Agents:     []config.Agent{{Name: "agt", Env: map[string]string{"API_SECRET": "s3cr3t"}}},
 		Resources:  []config.Resource{{Name: "res", Env: map[string]string{"AUTH_TOKEN": "tok"}}},
 	}
 	sanitizeStackSecrets(stack)
 	assert.Equal(t, "${vault:srv_DB_PASSWORD}", stack.MCPServers[0].Env["DB_PASSWORD"])
-	assert.Equal(t, "${vault:agt_API_SECRET}", stack.Agents[0].Env["API_SECRET"])
 	assert.Equal(t, "${vault:res_AUTH_TOKEN}", stack.Resources[0].Env["AUTH_TOKEN"])
 }
 
-func TestHandleStackAppend_Agent(t *testing.T) {
-	sf := writeTestStack(t)
-	s := &Server{stackFile: sf}
-
-	body, _ := json.Marshal(map[string]string{
-		"yaml":         "name: agent-new\nruntime: claude-code\nprompt: test\n",
-		"resourceType": "agent",
-	})
-	req := httptest.NewRequest(http.MethodPost, "/api/stack/append", strings.NewReader(string(body)))
-	w := httptest.NewRecorder()
-
-	s.handleStackAppend(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), `"success":true`)
-	assert.Contains(t, w.Body.String(), `"resourceName":"agent-new"`)
-
-	data, err := os.ReadFile(sf)
-	assert.NoError(t, err)
-	var stack config.Stack
-	assert.NoError(t, yaml.Unmarshal(data, &stack))
-	assert.Equal(t, 2, len(stack.Agents))
-	assert.Equal(t, "agent-new", stack.Agents[1].Name)
-}
 
 func TestHandleStackAppend_MCPServer(t *testing.T) {
 	sf := writeTestStack(t)
