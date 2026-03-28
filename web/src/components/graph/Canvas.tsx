@@ -9,7 +9,7 @@ import {
   type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { RotateCcw, Spline, Minus, Plus, Maximize, Rows3, LayoutGrid, Flame, Layers, Server, Database, GitCompareArrows, Eye, Cable, KeyRound } from 'lucide-react';
+import { RotateCcw, Spline, Minus, Plus, Maximize, Rows3, LayoutGrid, Flame, Layers, Server, Database, GitCompareArrows, Eye, Cable, KeyRound, BookOpen } from 'lucide-react';
 
 import { nodeTypes } from './nodeTypes';
 import { useStackStore } from '../../stores/useStackStore';
@@ -32,6 +32,7 @@ export function Canvas() {
   const selectNode = useStackStore((s) => s.selectNode);
   const selectedNodeId = useStackStore((s) => s.selectedNodeId);
   const resetLayout = useStackStore((s) => s.resetLayout);
+  const refreshNodesAndEdges = useStackStore((s) => s.refreshNodesAndEdges);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const edgeStyle = useUIStore((s) => s.edgeStyle);
   const toggleEdgeStyle = useUIStore((s) => s.toggleEdgeStyle);
@@ -47,6 +48,8 @@ export function Canvas() {
   const toggleWiringMode = useUIStore((s) => s.toggleWiringMode);
   const showSecretHeatmap = useUIStore((s) => s.showSecretHeatmap);
   const toggleSecretHeatmap = useUIStore((s) => s.toggleSecretHeatmap);
+  const showSkillsOnCanvas = useUIStore((s) => s.showSkillsOnCanvas);
+  const toggleSkillsOnCanvas = useUIStore((s) => s.toggleSkillsOnCanvas);
   const agentIsThinking = usePlaygroundStore((s) => s.agentIsThinking);
   const activeToolCallEdges = usePlaygroundStore((s) => s.activeToolCallEdges);
 
@@ -162,6 +165,11 @@ export function Canvas() {
 
   // No-op connect handler (wiring mode no longer supports agent connections)
   const onConnect = useCallback((_connection: Connection) => {}, []);
+
+  const handleSkillsToggle = useCallback(() => {
+    toggleSkillsOnCanvas();
+    refreshNodesAndEdges();
+  }, [toggleSkillsOnCanvas, refreshNodesAndEdges]);
 
   const isEmpty = !nodes || nodes.length === 0;
 
@@ -359,6 +367,16 @@ export function Canvas() {
             title={showSecretHeatmap ? 'Hide secret heatmap' : 'Show secret heatmap'}
           >
             <KeyRound className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleSkillsToggle}
+            className={cn(
+              'control-button',
+              showSkillsOnCanvas && 'ring-1 ring-tertiary/30 text-tertiary'
+            )}
+            title="Show skill groups on canvas"
+          >
+            <BookOpen className="w-4 h-4" />
           </button>
         </Panel>
       </ReactFlow>
