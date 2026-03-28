@@ -517,7 +517,7 @@ type SSEEvent = TokenEvent | ToolCallStartEvent | ToolCallEndEvent | MetricsEven
 export function PlaygroundTab() {
   const bottomPanelOpen = useUIStore((s) => s.bottomPanelOpen);
   const bottomPanelTab = useUIStore((s) => s.bottomPanelTab);
-  const isVisible = bottomPanelOpen && bottomPanelTab === 'playground';
+  const isVisible = bottomPanelOpen && (bottomPanelTab as string) === 'playground';
 
   const messages = usePlaygroundStore((s) => s.messages);
   const isLoading = usePlaygroundStore((s) => s.isLoading);
