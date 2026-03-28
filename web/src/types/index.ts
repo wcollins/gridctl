@@ -238,7 +238,19 @@ export interface RegistryStatus {
   activeSkills: number;
 }
 
-export type NodeData = GatewayNodeData | MCPServerNodeData | ResourceNodeData | ClientNodeData;
+// Skill canvas node data
+export type SkillTestStatus = 'passed' | 'failing' | 'untested';
+
+export interface SkillNodeData extends NodeDataBase {
+  type: 'skill';
+  name: string;
+  description: string;
+  state: ItemState;
+  testStatus: SkillTestStatus;
+  criteriaCount: number;
+}
+
+export type NodeData = GatewayNodeData | MCPServerNodeData | ResourceNodeData | ClientNodeData | SkillNodeData;
 
 // --- Workflow Types ---
 
