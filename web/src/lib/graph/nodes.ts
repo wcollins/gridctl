@@ -5,7 +5,7 @@
  */
 
 import type { Node } from '@xyflow/react';
-import type { MCPServerStatus, ResourceStatus, ClientStatus, NodeStatus, RegistryStatus, AgentSkill, SkillTestStatus } from '../../types';
+import type { MCPServerStatus, ResourceStatus, ClientStatus, NodeStatus, RegistryStatus, AgentSkill } from '../../types';
 import { NODE_TYPES } from '../constants';
 import { GATEWAY_NODE_ID } from './edges';
 
@@ -141,29 +141,38 @@ export function createClientNodes(clients: ClientStatus[]): Node[] {
 }
 
 /**
- * Create skill nodes for active registry skills
+ * Create skill group nodes — one per top-level directory for active skills
  */
-export function createSkillNodes(skills: AgentSkill[]): Node[] {
-  return skills
-    .filter((s) => s.state === 'active')
-    .map((skill) => {
-      const criteriaCount = skill.acceptanceCriteria?.length ?? 0;
-      const testStatus: SkillTestStatus = criteriaCount > 0 ? 'untested' : 'untested';
-      return {
-        id: `skill-${skill.name}`,
-        type: NODE_TYPES.SKILL,
-        position: { x: 0, y: 0 }, // Will be calculated by layout engine
-        data: {
-          type: 'skill',
-          name: skill.name,
-          description: skill.description,
-          state: skill.state,
-          testStatus,
-          criteriaCount,
-        },
-        draggable: true,
-      };
+export function createSkillGroupNodes(skills: AgentSkill[]): Node[] {
+  const active = skills.filter((s) => s.state === 'active');
+
+  const groups = new Map<string, AgentSkill[]>();
+  for (const skill of active) {
+    const topDir = skill.dir ? skill.dir.split('/')[0] : skill.name;
+    const existing = groups.get(topDir) ?? [];
+    existing.push(skill);
+    groups.set(topDir, existing);
+  }
+
+  const nodes: Node[] = [];
+  for (const [groupName, groupSkills] of groups) {
+    const criteriaCount = groupSkills.reduce((n, s) => n + (s.acceptanceCriteria?.length ?? 0), 0);
+    nodes.push({
+      id: `skill-group-${groupName}`,
+      type: NODE_TYPES.SKILL_GROUP,
+      position: { x: 0, y: 0 }, // Will be calculated by layout engine
+      data: {
+        type: 'skill-group',
+        groupName,
+        totalSkills: groupSkills.length,
+        activeSkills: groupSkills.length,
+        failingSkills: 0,
+        untestedSkills: criteriaCount > 0 ? groupSkills.length : 0,
+      },
+      draggable: true,
     });
+  }
+  return nodes;
 }
 
 /**
@@ -185,7 +194,7 @@ export function createAllNodes(
     ...createClientNodes(clients),
     ...createMCPServerNodes(mcpServers),
     ...createResourceNodes(resources),
-    ...createSkillNodes(skills),
+    ...createSkillGroupNodes(skills),
   ];
 
   return nodes;
