@@ -5,7 +5,7 @@
  */
 
 import type { Node } from '@xyflow/react';
-import type { MCPServerStatus, ResourceStatus, ClientStatus, NodeStatus, RegistryStatus } from '../../types';
+import type { MCPServerStatus, ResourceStatus, ClientStatus, NodeStatus, RegistryStatus, AgentSkill, SkillTestStatus } from '../../types';
 import { NODE_TYPES } from '../constants';
 import { GATEWAY_NODE_ID } from './edges';
 
@@ -141,6 +141,32 @@ export function createClientNodes(clients: ClientStatus[]): Node[] {
 }
 
 /**
+ * Create skill nodes for active registry skills
+ */
+export function createSkillNodes(skills: AgentSkill[]): Node[] {
+  return skills
+    .filter((s) => s.state === 'active')
+    .map((skill) => {
+      const criteriaCount = skill.acceptanceCriteria?.length ?? 0;
+      const testStatus: SkillTestStatus = criteriaCount > 0 ? 'untested' : 'untested';
+      return {
+        id: `skill-${skill.name}`,
+        type: NODE_TYPES.SKILL,
+        position: { x: 0, y: 0 }, // Will be calculated by layout engine
+        data: {
+          type: 'skill',
+          name: skill.name,
+          description: skill.description,
+          state: skill.state,
+          testStatus,
+          criteriaCount,
+        },
+        draggable: true,
+      };
+    });
+}
+
+/**
  * Create all nodes for the graph
  */
 export function createAllNodes(
@@ -150,7 +176,8 @@ export function createAllNodes(
   sessions?: number,
   clients: ClientStatus[] = [],
   registryStatus?: RegistryStatus | null,
-  codeMode?: string | null
+  codeMode?: string | null,
+  skills: AgentSkill[] = []
 ): Node[] {
   const linkedClients = clients.filter((c) => c.linked);
   const nodes: Node[] = [
@@ -158,6 +185,7 @@ export function createAllNodes(
     ...createClientNodes(clients),
     ...createMCPServerNodes(mcpServers),
     ...createResourceNodes(resources),
+    ...createSkillNodes(skills),
   ];
 
   return nodes;
