@@ -60,6 +60,7 @@ export const ButterflyZone = {
   GATEWAY: 1,
   SERVERS: 2,
   RESOURCES: 3,
+  SKILLS: 5,
 } as const;
 
 export type ButterflyZone = (typeof ButterflyZone)[keyof typeof ButterflyZone];
@@ -84,6 +85,7 @@ export type EdgeRelationType =
   | 'agent-to-gateway'     // Agent initiates connection to gateway
   | 'gateway-to-server'    // Gateway exposes MCP server
   | 'gateway-to-resource'  // Gateway manages resource
+  | 'gateway-to-skill'     // Gateway serves a registered skill
   | 'agent-uses-server'    // Agent uses specific MCP server (via uses field)
   | 'agent-uses-agent';    // Agent delegates to another agent (A2A)
 
