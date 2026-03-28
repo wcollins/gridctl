@@ -140,7 +140,6 @@ function AppContent() {
     onSwitchToMetrics: () => setBottomPanelTab('metrics'),
     onSwitchToSpec: () => setBottomPanelTab('spec'),
     onSwitchToTraces: () => setBottomPanelTab('traces'),
-    onSwitchToPlayground: () => setBottomPanelTab('playground'),
     onOpenPalette: toggleCommandPalette,
   });
 

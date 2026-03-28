@@ -12,7 +12,6 @@ interface ShortcutOptions {
   onSwitchToMetrics?: () => void;
   onSwitchToSpec?: () => void;
   onSwitchToTraces?: () => void;
-  onSwitchToPlayground?: () => void;
   onOpenPalette?: () => void;
 }
 
@@ -85,11 +84,6 @@ export function useKeyboardShortcuts(options: ShortcutOptions) {
         e.preventDefault();
         options.onSwitchToTraces?.();
       }
-      if (isMod && e.key === '5') {
-        e.preventDefault();
-        options.onSwitchToPlayground?.();
-      }
-
       // Open command palette: Cmd/Ctrl+K
       if (isMod && e.key === 'k') {
         e.preventDefault();

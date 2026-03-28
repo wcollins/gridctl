@@ -116,6 +116,7 @@ export const useStackStore = create<StackState>()(
       if (!gatewayInfo) return;
 
       const registryStatus = useRegistryStore.getState().status;
+      const skills = useRegistryStore.getState().skills ?? [];
       const isCompact = useUIStore.getState().compactCards;
 
       // Only preserve positions for nodes the user has explicitly dragged
@@ -128,7 +129,8 @@ export const useStackStore = create<StackState>()(
         clients,
         registryStatus,
         codeMode,
-        isCompact
+        isCompact,
+        skills
       );
       set({ nodes, edges });
     },
@@ -138,6 +140,7 @@ export const useStackStore = create<StackState>()(
       if (!gatewayInfo) return;
 
       const registryStatus = useRegistryStore.getState().status;
+      const skills = useRegistryStore.getState().skills ?? [];
       const isCompact = useUIStore.getState().compactCards;
 
       // Clear dragged positions and recalculate from scratch
@@ -150,7 +153,8 @@ export const useStackStore = create<StackState>()(
         clients,
         registryStatus,
         codeMode,
-        isCompact
+        isCompact,
+        skills
       );
       set({ nodes, edges, draggedPositions: new Map() });
     },
