@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v0.4.2
-	github.com/docker/docker v27.3.1+incompatible
+	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/dop251/goja v0.0.0-20260219130522-0ba9a5494a59
 	github.com/evanw/esbuild v0.27.3
@@ -32,7 +32,6 @@ require (
 
 require (
 	dario.cat/mergo v1.0.0 // indirect
-	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
@@ -43,6 +42,8 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
+	github.com/containerd/errdefs v1.0.0 // indirect
+	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -59,7 +60,6 @@ require (
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/pprof v0.0.0-20240227163752-401108e1b7e7 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -68,15 +68,11 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
-	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/patternmatcher v0.6.0 // indirect
-	github.com/moby/sys/sequential v0.6.0 // indirect
-	github.com/moby/sys/user v0.4.0 // indirect
-	github.com/moby/sys/userns v0.1.0 // indirect
+	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/morikuni/aec v1.1.0 // indirect
@@ -90,7 +86,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
