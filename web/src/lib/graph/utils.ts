@@ -24,6 +24,11 @@ export function getNodeDimensions(node: Node, compact = false): { width: number;
         width: LAYOUT.CLIENT_WIDTH,
         height: compact ? LAYOUT.CLIENT_HEIGHT_COMPACT : LAYOUT.CLIENT_HEIGHT,
       };
+    case 'skill':
+      return {
+        width: 176, // w-44 = 11rem = 176px
+        height: compact ? LAYOUT.NODE_HEIGHT_COMPACT : LAYOUT.NODE_HEIGHT,
+      };
     default:
       return { width: LAYOUT.NODE_WIDTH, height: LAYOUT.NODE_HEIGHT };
   }
