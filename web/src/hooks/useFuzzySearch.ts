@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import Fuse from 'fuse.js';
+import Fuse, { type IFuseOptions } from 'fuse.js';
 import type { AgentSkill } from '../types';
 
-const FUSE_OPTIONS: Fuse.IFuseOptions<AgentSkill> = {
+const FUSE_OPTIONS: IFuseOptions<AgentSkill> = {
   keys: ['name', 'description'],
   threshold: 0.4,
 };
