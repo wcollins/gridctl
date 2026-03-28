@@ -197,6 +197,7 @@ export interface AgentSkill {
   state: ItemState;
   body: string;          // Markdown content (after frontmatter)
   fileCount: number;     // Supporting files count
+  dir?: string;          // Relative path from skills/ root (e.g., "git-workflow/branch-fork")
 }
 
 // CriterionResult holds the outcome of a single acceptance criterion test
@@ -250,7 +251,16 @@ export interface SkillNodeData extends NodeDataBase {
   criteriaCount: number;
 }
 
-export type NodeData = GatewayNodeData | MCPServerNodeData | ResourceNodeData | ClientNodeData | SkillNodeData;
+export interface SkillGroupNodeData extends NodeDataBase {
+  type: 'skill-group';
+  groupName: string;
+  totalSkills: number;
+  activeSkills: number;
+  failingSkills: number;
+  untestedSkills: number;
+}
+
+export type NodeData = GatewayNodeData | MCPServerNodeData | ResourceNodeData | ClientNodeData | SkillNodeData | SkillGroupNodeData;
 
 // --- Workflow Types ---
 

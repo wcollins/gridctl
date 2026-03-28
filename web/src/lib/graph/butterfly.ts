@@ -58,6 +58,7 @@ function getNodeZone(node: Node): ButterflyZone {
       return 3; // RESOURCES zone
 
     case 'skill':
+    case 'skill-group':
       return ButterflyZone.SKILLS; // SKILLS zone
 
     default:
