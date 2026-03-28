@@ -14,7 +14,6 @@ import (
 	"github.com/gridctl/gridctl/pkg/dockerclient"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/pkg/archive"
 )
 
 // BuildImage builds a Docker image from a context directory.
@@ -28,9 +27,7 @@ func BuildImage(ctx context.Context, cli dockerclient.DockerClient, contextPath,
 	}
 
 	// Create tar archive of the build context
-	buildContext, err := archive.TarWithOptions(contextPath, &archive.TarOptions{
-		ExcludePatterns: getExcludePatterns(contextPath),
-	})
+	buildContext, err := createBuildContext(contextPath)
 	if err != nil {
 		return "", fmt.Errorf("creating build context: %w", err)
 	}
@@ -141,8 +138,71 @@ func getExcludePatterns(contextPath string) []string {
 	return patterns
 }
 
+// createBuildContext creates a tar archive of the build context, respecting
+// .dockerignore and common excludes.
+func createBuildContext(contextPath string) (io.ReadCloser, error) {
+	excludes := getExcludePatterns(contextPath)
+	pr, pw := io.Pipe()
+
+	go func() {
+		tw := tar.NewWriter(pw)
+		defer tw.Close()
+		defer pw.Close()
+
+		err := filepath.Walk(contextPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			relPath, err := filepath.Rel(contextPath, path)
+			if err != nil {
+				return err
+			}
+			if relPath == "." {
+				return nil
+			}
+			for _, pattern := range excludes {
+				if matched, _ := filepath.Match(pattern, relPath); matched {
+					if info.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+				if matched, _ := filepath.Match(pattern, filepath.Base(relPath)); matched {
+					if info.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+			}
+			header, err := tar.FileInfoHeader(info, "")
+			if err != nil {
+				return err
+			}
+			header.Name = relPath
+			if err := tw.WriteHeader(header); err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				file, err := os.Open(path)
+				if err != nil {
+					return err
+				}
+				defer file.Close()
+				if _, err := io.Copy(tw, file); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			pw.CloseWithError(err)
+		}
+	}()
+
+	return pr, nil
+}
+
 // CreateTarFromDir creates a tar archive from a directory.
-// This is a simpler alternative if archive.TarWithOptions has issues.
 func CreateTarFromDir(dir string) (io.ReadCloser, error) {
 	pr, pw := io.Pipe()
 
