@@ -8,22 +8,22 @@ import (
 	"github.com/gridctl/gridctl/pkg/dockerclient"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
-	"github.com/docker/go-connections/nat"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 // MockDockerClient is a mock implementation of DockerClient for testing.
 type MockDockerClient struct {
 	// State
-	Containers []types.Container
+	Containers []container.Summary
 	Networks   []network.Summary
 	Images     []image.Summary
 
-	// ContainerJSON responses for ContainerInspect (keyed by container ID)
-	ContainerDetails map[string]types.ContainerJSON
+	// ContainerInspect responses (keyed by container ID)
+	ContainerDetails map[string]container.InspectResponse
 
 	// Error injection per method
 	PingError             error
@@ -112,7 +112,7 @@ func (m *MockDockerClient) ContainerLogs(ctx context.Context, container string, 
 	return io.NopCloser(strings.NewReader("mock log line")), nil
 }
 
-func (m *MockDockerClient) ContainerList(ctx context.Context, options container.ListOptions) ([]types.Container, error) {
+func (m *MockDockerClient) ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error) {
 	m.recordCall("ContainerList")
 	if m.ContainerListError != nil {
 		return nil, m.ContainerListError
@@ -120,10 +120,10 @@ func (m *MockDockerClient) ContainerList(ctx context.Context, options container.
 	return m.Containers, nil
 }
 
-func (m *MockDockerClient) ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error) {
+func (m *MockDockerClient) ContainerInspect(ctx context.Context, containerID string) (container.InspectResponse, error) {
 	m.recordCall("ContainerInspect")
 	if m.ContainerInspectError != nil {
-		return types.ContainerJSON{}, m.ContainerInspectError
+		return container.InspectResponse{}, m.ContainerInspectError
 	}
 	if m.ContainerDetails != nil {
 		if details, ok := m.ContainerDetails[containerID]; ok {
@@ -131,21 +131,18 @@ func (m *MockDockerClient) ContainerInspect(ctx context.Context, containerID str
 		}
 	}
 	// Return default empty response
-	return types.ContainerJSON{
-		ContainerJSONBase: &types.ContainerJSONBase{
+	return container.InspectResponse{
+		ContainerJSONBase: &container.ContainerJSONBase{
 			Name: "/" + containerID,
-			State: &types.ContainerState{
+			State: &container.State{
 				Status: "running",
 			},
 		},
 		Config: &container.Config{
 			Labels: map[string]string{},
 		},
-		NetworkSettings: &types.NetworkSettings{
+		NetworkSettings: &container.NetworkSettings{
 			Networks: make(map[string]*network.EndpointSettings),
-			NetworkSettingsBase: types.NetworkSettingsBase{
-				Ports: nat.PortMap{},
-			},
 		},
 	}, nil
 }
@@ -198,9 +195,9 @@ func (m *MockDockerClient) ImagePull(ctx context.Context, ref string, options im
 	return io.NopCloser(strings.NewReader(`{"status":"Pull complete"}`)), nil
 }
 
-func (m *MockDockerClient) ImageBuild(ctx context.Context, buildContext io.Reader, options types.ImageBuildOptions) (types.ImageBuildResponse, error) {
+func (m *MockDockerClient) ImageBuild(ctx context.Context, buildContext io.Reader, options build.ImageBuildOptions) (build.ImageBuildResponse, error) {
 	m.recordCall("ImageBuild")
-	return types.ImageBuildResponse{
+	return build.ImageBuildResponse{
 		Body: io.NopCloser(strings.NewReader(`{"stream":"Successfully built mock-image"}`)),
 	}, nil
 }
