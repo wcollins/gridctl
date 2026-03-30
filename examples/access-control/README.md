@@ -1,41 +1,28 @@
 # 🔐 Access Control
 
-Examples demonstrating tool filtering and least-privilege access patterns.
+Examples demonstrating tool filtering for least-privilege access.
 
 ## 📄 Examples
 
 | File | Description |
 |------|-------------|
-| `tool-filtering.yaml` | Server-level and agent-level tool filtering |
+| `tool-filtering.yaml` | Server-level tool filtering |
 
 ## 💡 Concepts
 
-### Two-Level Filtering
+### Server-Level Filtering
 
-Gridctl supports restricting tool access at two levels:
+The `tools` field on an MCP server whitelists which tools are exposed to all clients. Tools not in the list are never loaded into the gateway — they don't appear in tool listings and cannot be called:
 
-1. **Server-Level** - Restrict which tools a server exposes to the gateway:
 ```yaml
 mcp-servers:
   - name: restricted-server
     image: my-mcp:latest
     port: 3000
-    tools: ["read", "list"]   # Only these tools are visible
+    tools: ["read", "list"]   # Only these tools reach the gateway
 ```
 
-2. **Agent-Level** - Restrict which tools a specific agent can access:
-```yaml
-agents:
-  - name: viewer-agent
-    image: my-agent:latest
-    uses:
-      - server: restricted-server
-        tools: ["read"]       # Further restricted per agent
-```
-
-### Filtering Precedence
-
-Server-level filtering applies first, then agent-level filtering narrows further. An agent can never access tools that the server doesn't expose.
+This is the primary mechanism for reducing context window consumption and preventing tool confusion.
 
 ## 💻 Usage
 
