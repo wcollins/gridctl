@@ -283,7 +283,7 @@ Tool calls fail with `connection lost` after working initially.
 **Symptoms:**
 
 ```
-network configuration changed - full restart required (run gridctl destroy && gridctl deploy)
+network configuration changed - full restart required (run gridctl destroy && gridctl apply)
 ```
 
 **Causes:**
@@ -296,7 +296,7 @@ Perform a full restart:
 
 ```bash
 gridctl destroy
-gridctl deploy
+gridctl apply
 ```
 
 ### Partial reload failure
@@ -511,5 +511,5 @@ If your issue isn't covered here:
 
 1. Check `gridctl status` for the current state of your stack
 2. Review container logs: `docker logs gridctl-<stack>-<name>`
-3. Run with verbose logging: `gridctl deploy --log-level debug`
+3. Run with verbose logging: `gridctl apply <stack.yaml> --verbose`
 4. Open an issue at [github.com/gridctl/gridctl/issues](https://github.com/gridctl/gridctl/issues)

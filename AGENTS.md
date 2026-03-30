@@ -74,7 +74,7 @@ gridctl/
 ├── cmd/gridctl/           # CLI entry point
 │   ├── main.go           # Entry point
 │   ├── root.go           # Cobra root command + serve command
-│   ├── deploy.go         # Start stack + gateway
+│   ├── apply.go          # Start stack + gateway
 │   ├── destroy.go        # Stop containers
 │   ├── status.go         # Show container status
 │   ├── link.go           # Connect LLM clients to gateway
@@ -249,19 +249,19 @@ make clean-mock-servers # Stop and remove mock MCP servers
 
 ```bash
 # Start a stack (runs as daemon, returns immediately)
-./gridctl deploy examples/getting-started/mcp-basic.yaml
+./gridctl apply examples/getting-started/mcp-basic.yaml
 
 # Start with options
-./gridctl deploy stack.yaml --port 8180 --no-cache
+./gridctl apply stack.yaml --port 8180 --no-cache
 
 # Run in foreground with verbose output (for debugging)
-./gridctl deploy stack.yaml --foreground
+./gridctl apply stack.yaml --foreground
 
 # Watch for changes and auto-reload
-./gridctl deploy stack.yaml --watch
+./gridctl apply stack.yaml --watch
 
-# Deploy and auto-link all detected LLM clients
-./gridctl deploy stack.yaml --flash
+# Apply and auto-link all detected LLM clients
+./gridctl apply stack.yaml --flash
 
 # Check running gateways and containers
 ./gridctl status
@@ -303,7 +303,7 @@ make clean-mock-servers # Stop and remove mock MCP servers
 
 ### Command Reference
 
-#### `gridctl deploy <stack.yaml>`
+#### `gridctl apply <stack.yaml>`
 
 Starts containers and MCP gateway for a stack.
 
@@ -316,9 +316,19 @@ Starts containers and MCP gateway for a stack.
 | `--quiet` | `-q` | Suppress progress output (show only final result) |
 | `--verbose` | `-v` | Print full stack as JSON |
 | `--watch` | `-w` | Watch stack file for changes and hot reload |
-| `--flash` | | Auto-link detected LLM clients after deploy |
+| `--flash` | | Auto-link detected LLM clients after apply |
 | `--code-mode` | | Enable gateway code mode (replaces tools with search + execute meta-tools) |
 | `--no-expand` | | Disable environment variable expansion in OpenAPI spec files |
+
+#### `gridctl plan <stack.yaml>`
+
+Compares the stack spec against running state and shows a structured diff.
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--yes` | `-y` | Auto-approve and apply changes |
+| `--auto-approve` | | Auto-approve and apply changes (CI/CD equivalent of `-y`) |
+| `--format` | | Output format: `json` for machine-readable output |
 
 #### `gridctl destroy <stack.yaml>`
 
@@ -397,20 +407,20 @@ The `GRIDCTL_VAULT_PASSPHRASE` environment variable can provide the passphrase n
 
 #### `gridctl pins <subcommand>`
 
-Manage TOFU schema pins that protect against rug pull attacks (CVE-2025-54136 class). On first deploy, SHA256 hashes of all tool definitions are pinned to `~/.gridctl/pins/{stackName}.json`. Subsequent deploys and reconnects verify tool definitions against stored hashes and surface drift.
+Manage TOFU schema pins that protect against rug pull attacks (CVE-2025-54136 class). On first apply, SHA256 hashes of all tool definitions are pinned to `~/.gridctl/pins/{stackName}.json`. Subsequent applies and reconnects verify tool definitions against stored hashes and surface drift.
 
 | Subcommand | Description |
 |------------|-------------|
 | `list` | Table of all servers: tool count, status (pinned/drift/approved), last verified timestamp |
 | `verify [server]` | Show pin verification status for all servers or a specific server |
 | `approve <server>` | Re-pin current tool definitions for a server, clearing drift status |
-| `reset <server>` | Delete pins for a server (re-pinned on next deploy) |
+| `reset <server>` | Delete pins for a server (re-pinned on next apply) |
 
 **Flags:**
 
 | Flag | Subcommand | Description |
 |------|------------|-------------|
-| `--stack` | all | Stack name (auto-detected when only one stack is deployed) |
+| `--stack` | all | Stack name (auto-detected when only one stack is running) |
 | `--exit-code` | `verify` | Exit 1 if any server has drift (CI use case) |
 
 #### `gridctl test <skill-name>`
@@ -433,7 +443,7 @@ Exit codes: `0` activated, `1` blocked by missing acceptance criteria or validat
 
 ### Daemon Mode
 
-By default, `gridctl deploy` runs the MCP gateway as a background daemon:
+By default, `gridctl apply` runs the MCP gateway as a background daemon:
 - Waits until all MCP servers are initialized before returning (up to 60s timeout)
 - State stored in `~/.gridctl/state/{name}.json`
 - Logs written to `~/.gridctl/logs/{name}.log`
@@ -460,7 +470,7 @@ Gridctl stores daemon state in `~/.gridctl/`:
 
 ## MCP Gateway
 
-When `gridctl deploy` runs, it:
+When `gridctl apply` runs, it:
 1. Parses the stack YAML
 2. Creates Docker network
 3. Builds/pulls images
@@ -486,7 +496,7 @@ When `gridctl deploy` runs, it:
 - `GET /api/clients` - Returns status of detected LLM clients (name, detected, linked, transport)
 
 **Reload API:**
-- `POST /api/reload` - Triggers hot reload of the stack configuration (requires `--watch` flag on deploy)
+- `POST /api/reload` - Triggers hot reload of the stack configuration (requires `--watch` flag on apply)
 
 **MCP Server Control API:**
 - `POST /api/mcp-servers/{name}/restart` - Restart an individual MCP server connection
