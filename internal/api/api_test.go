@@ -638,6 +638,141 @@ func TestHandleGatewayLogs_MethodNotAllowed(t *testing.T) {
 	}
 }
 
+// --- Agent logs endpoint tests ---
+
+func TestHandleAgentLogs_NoBuffer(t *testing.T) {
+	srv := newTestServer(t)
+	// logBuffer is nil by default
+	handler := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/atlassian/logs", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	var result []any
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty array, got %d entries", len(result))
+	}
+}
+
+func TestHandleAgentLogs_FiltersByServer(t *testing.T) {
+	srv := newTestServerWithLogBuffer(t, 100)
+
+	srv.logBuffer.Add(logging.BufferedEntry{
+		Level:   "INFO",
+		Message: "atlassian connected",
+		Attrs:   map[string]any{"server": "atlassian"},
+	})
+	srv.logBuffer.Add(logging.BufferedEntry{
+		Level:   "INFO",
+		Message: "github connected",
+		Attrs:   map[string]any{"server": "github"},
+	})
+	srv.logBuffer.Add(logging.BufferedEntry{
+		Level:   "WARN",
+		Message: "atlassian slow",
+		Attrs:   map[string]any{"server": "atlassian"},
+	})
+
+	handler := srv.Handler()
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/atlassian/logs", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	var result []logging.BufferedEntry
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 atlassian entries, got %d", len(result))
+	}
+	for _, entry := range result {
+		if entry.Attrs["server"] != "atlassian" {
+			t.Errorf("expected server=atlassian, got %v", entry.Attrs["server"])
+		}
+	}
+}
+
+func TestHandleAgentLogs_EmptyWhenNoMatch(t *testing.T) {
+	srv := newTestServerWithLogBuffer(t, 100)
+
+	srv.logBuffer.Add(logging.BufferedEntry{
+		Level:   "INFO",
+		Message: "github connected",
+		Attrs:   map[string]any{"server": "github"},
+	})
+
+	handler := srv.Handler()
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/atlassian/logs", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	var result []logging.BufferedEntry
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty array for non-matching server, got %d entries", len(result))
+	}
+}
+
+func TestHandleAgentLogs_LinesParam(t *testing.T) {
+	srv := newTestServerWithLogBuffer(t, 200)
+
+	for i := 0; i < 20; i++ {
+		srv.logBuffer.Add(logging.BufferedEntry{
+			Level:   "INFO",
+			Message: "log entry",
+			Attrs:   map[string]any{"server": "atlassian"},
+		})
+	}
+
+	handler := srv.Handler()
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/atlassian/logs?lines=5", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	var result []logging.BufferedEntry
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(result) > 5 {
+		t.Errorf("expected at most 5 entries, got %d", len(result))
+	}
+}
+
+func TestHandleAgentLogs_MethodNotAllowed(t *testing.T) {
+	srv := newTestServer(t)
+	handler := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/atlassian/logs", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", rec.Code)
+	}
+}
+
 // --- Reload endpoint tests ---
 
 func TestHandleReload_NotEnabled(t *testing.T) {
