@@ -33,9 +33,9 @@ gridctl deploy stack.yaml
 
 MCP servers are everywhere. Running them shouldn't require a PhD in container orchestration. Or, is the MCP server not running in a container? Is a single endpoint exposed behind an existing platform? Is another team hosting and managing an MCP server that is on a different machine on the same network? Different transport types, methods of hosting, and `.json` files start to accumulate like dust. 
 
-I originally built this project to have a way to leverage a single configuration in my application, that I never have to update, while still building various combinations of MCP servers and Agents for rapid prototyping and learning.
+I originally built this project to have a way to leverage a single configuration in my application, that I never have to update, while still building various combinations of MCP servers for rapid prototyping and learning.
 
-I would rather be building than juggling ports, tracking environment variables, and hoping everything with my setup is ready for the next demo, no matter what servers or agents I'm using. My client now connects once and accesses everything over `localhost:8180/sse` by default.
+I would rather be building than juggling ports, tracking environment variables, and hoping everything with my setup is ready for the next demo. My client now connects once and accesses everything over `localhost:8180/sse` by default.
 
 ```yaml
 version: "1"
@@ -47,6 +47,7 @@ mcp-servers:
   - name: github
     image: ghcr.io/github/github-mcp-server:latest
     transport: stdio
+    tools: ["get_file_contents", "search_code", "list_commits", "get_pull_request"]
     env:
       GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
 
@@ -54,32 +55,11 @@ mcp-servers:
   - name: atlassian
     command: ["npx", "mcp-remote", "https://mcp.atlassian.com/v1/sse"]
 
-agents:
-
-  # Test Agent - A2A
-  - name: code-reviewer
-    image: alpine:latest
-    description: "AI assistant for code review and PR analysis"
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
-
-    # Agent Level Filtering for Tools
-    uses:
-      - server: github
-        tools: ["get_file_contents", "get_pull_request", "list_commits"]
-
-    # Agent Definition
-    a2a:
-      enabled: true
-      version: "1.0.0"
-      skills:
-        - id: review-code
-          name: "Review Code"
-          description: "Analyze code changes for bugs, style issues, and improvements"
-          tags: ["code", "review", "quality"]
-        - id: summarize-pr
-          name: "Summarize PR"
-          description: "Generate concise summaries of pull request changes"
-          tags: ["summary", "documentation"]
+  # Turn any REST API into MCP tools via OpenAPI spec
+  - name: my-api
+    openapi:
+      spec: https://api.example.com/openapi.json
+      baseUrl: https://api.example.com
 ```
 
 Three servers. Three different transports. One endpoint. Navigate to [localhost:8180](localhost:8180) to visualize the stack 👉
@@ -112,7 +92,7 @@ cd gridctl && make build
 
 ## 🐋 Container Runtime
 
-Gridctl requires a container runtime for workloads that run in containers (MCP servers with `image`, resources, agents). Docker is detected by default; [Podman](https://podman.io) is supported as an experimental alternative.
+Gridctl requires a container runtime for workloads that run in containers (MCP servers with `image` and resources). Docker is detected by default; [Podman](https://podman.io) is supported as an experimental alternative.
 
 ### Runtime Detection
 
@@ -175,7 +155,7 @@ gridctl destroy examples/getting-started/skills-basic.yaml
 
 ### Stack as Code
 
-Fast, consistent, ephemeral, flexible, and version controlled! Many practitioners use different combinations of `MCP Servers` and `Agents` depending on what they are working on. Being able to instantiate, from a single file, the various combinations needed for the right task, saves time in _development_ and _prototyping_. The `stack.yaml` file is where you define this.
+Fast, consistent, ephemeral, flexible, and version controlled! Many practitioners use different combinations of MCP servers depending on what they are working on. Being able to instantiate, from a single file, the various combinations needed for the right task, saves time in _development_ and _prototyping_. The `stack.yaml` file is where you define this.
 
 ### Spec-Driven Workflow
 
@@ -186,9 +166,13 @@ gridctl validate stack.yaml    # Lint and schema-check the spec (exit 0/1/2)
 gridctl plan stack.yaml        # Diff against running state — see exactly what changes
 gridctl deploy stack.yaml      # Apply the spec
 gridctl export                 # Reverse-engineer stack.yaml from a running stack
+gridctl test <skill>           # Run acceptance criteria for a skill (exit 0/1/2)
+gridctl activate <skill>       # Promote a skill from draft to active
 ```
 
 Drift detection runs in the background: the canvas flags servers that are running but absent from your spec, and declarations in your spec that haven't been deployed — so your YAML and your environment stay in sync. Need to build a stack from scratch? The visual spec builder lets you compose `stack.yaml` through a guided wizard and export the result.
+
+Executable skills (those with a `workflow` block) must define `acceptance_criteria` before `gridctl activate` will promote them — ensuring every deployed skill has a machine-checkable definition of done.
 
 ### Protocol Bridge
 
@@ -207,16 +191,9 @@ Aggregates tools from HTTP servers, stdio processes, SSH tunnels, and external U
 
 ### Context Window Optimization _(access control)_
 
-Are you paying for your own tokens for learning? Even if you aren't, being optimized is critical for not overloading that context window! Reducing the numbers of tools and scoping things out correctly, significantly reduces the likelihood of _"tool confusion"_ e.g., a given LLM selects a similarly named tool from the wrong server.
+Are you paying for your own tokens for learning? Even if you aren't, being optimized is critical for not overloading that context window! Reducing the number of tools and scoping things correctly significantly reduces the likelihood of _"tool confusion"_ — where a given LLM selects a similarly named tool from the wrong server.
 
-By using `uses` and `tools` filters in the _stack.yaml_ file, `gridctl` filters this list *before* it reaches the LLM. This way, you only get what you need. Filtering is enforced at two levels:
-
-- **Server-level**: tools are whitelisted when `gridctl` connects to the downstream MCP server — unauthorized tools are never loaded into the gateway
-- **Agent-level**: the gateway validates every tool list request and tool call against the requesting agent's `ToolSelector` — unauthorized calls are rejected even if the model knows the tool name
-
-#### Filtering in Action
-
-**Server-Level Filtering** - Restrict which tools the server exposes to the gateway:
+Use the `tools` filter in the _stack.yaml_ file to whitelist exactly which tools each server exposes. `gridctl` filters this list *before* it reaches the LLM:
 
 ```yaml
 mcp-servers:
@@ -228,25 +205,7 @@ mcp-servers:
       GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
 ```
 
-This GitHub server only exposes read-only tools. Write operations like `create_issue` and `create_pull_request` are hidden from all agents.
-
-**Agent-Level Filtering** - Further restrict which tools a specific agent can access:
-
-```yaml
-agents:
-  - name: code-review-agent
-    image: my-org/code-review:latest
-    description: "Reviews pull requests and provides feedback"
-    uses:
-      - server: github
-        tools: ["get_file_contents", "get_pull_request", "list_commits"]
-```
-
-This agent can only access three of the five tools exposed by the GitHub server - just enough to review code without searching the broader codebase.
-
-### A2A Protocol
-
-Limited [Agent-to-Agent](https://google.github.io/A2A/) protocol support. Expose your agents via `/.well-known/agent.json` or connect to remote A2A agents. Agents can use other agents as tools. `A2A` is still emerging, as is the common use-cases. This part of the project will continue to evolve in the future.
+This GitHub server only exposes read-only tools. Write operations like `create_issue` and `create_pull_request` are hidden from all clients.
 
 ### Output Format Conversion
 
@@ -288,9 +247,9 @@ Or enable via CLI flag:
 gridctl deploy stack.yaml --code-mode
 ```
 
-The sandbox provides `mcp.callTool(serverName, toolName, args)` for synchronous tool calls and `console.log/warn/error` for output capture. Modern JavaScript syntax (arrow functions, destructuring, template literals) is supported via esbuild transpilation. Agent-level ACLs are enforced inside the sandbox — agents can only call tools they have access to. See [`examples/code-mode/`](examples/code-mode/) for a working example.
+The sandbox provides `mcp.callTool(serverName, toolName, args)` for synchronous tool calls and `console.log/warn/error` for output capture. Modern JavaScript syntax (arrow functions, destructuring, template literals) is supported via esbuild transpilation. See [`examples/code-mode/`](examples/code-mode/) for a working example.
 
-### Agent Skills Registry
+### Skills Registry
 
 Store reusable skills as [SKILL.md](https://agentskills.io) files — markdown documents with YAML frontmatter that get exposed to LLM clients as MCP prompts. Create them via the REST API, Web UI, or by dropping files into `~/.gridctl/registry/skills/`.
 
@@ -378,6 +337,8 @@ gridctl skill remove <name>          # Remove an imported skill
 gridctl skill pin <name> <ref>       # Pin a skill to a specific git ref
 gridctl skill info <name>            # Show skill origin and update status
 gridctl skill try <repo-url>         # Temporarily import a skill for evaluation
+gridctl test <skill-name>            # Run acceptance criteria for a skill (exit 0/1/2)
+gridctl activate <skill-name>        # Promote a skill from draft to active state
 gridctl traces                       # Show recent distributed traces (table view)
 gridctl traces <trace-id>            # Show span waterfall for a single trace
 gridctl traces --follow              # Stream new traces as they arrive
@@ -433,16 +394,13 @@ Restart Claude Desktop after editing. All tools from your stack are now availabl
 
 | Example | What It Shows |
 |:--------|:--------------|
-| [`agent-basic.yaml`](examples/getting-started/agent-basic.yaml) | Stack definition with agents and access control |
-| [`skills-basic.yaml`](examples/getting-started/skills-basic.yaml) | Agents with A2A protocol |
-| [`tool-filtering.yaml`](examples/access-control/tool-filtering.yaml) | Server and agent-level access control |
+| [`mcp-basic.yaml`](examples/getting-started/mcp-basic.yaml) | Stack with multiple MCP servers and tool filtering |
+| [`tool-filtering.yaml`](examples/access-control/tool-filtering.yaml) | Server-level tool access control |
 | [`local-mcp.yaml`](examples/transports/local-mcp.yaml) | Local process transport |
 | [`ssh-mcp.yaml`](examples/transports/ssh-mcp.yaml) | SSH tunnel transport |
 | [`external-mcp.yaml`](examples/transports/external-mcp.yaml) | External HTTP/SSE servers |
 | [`gateway-basic.yaml`](examples/gateways/gateway-basic.yaml) | Gateway to an existing MCP server |
 | [`gateway-remote.yaml`](examples/gateways/gateway-remote.yaml) | Remote access to Gridctl from other machines |
-| [`basic-a2a.yaml`](examples/multi-agent/basic-a2a.yaml) | Agent-to-agent communication |
-| [`multi-agent-skills.yaml`](examples/multi-agent/multi-agent-skills.yaml) | Agents equipping other agents as skills |
 | [`github-mcp.yaml`](examples/platforms/github-mcp.yaml) | GitHub MCP server integration |
 | [`atlassian-mcp.yaml`](examples/platforms/atlassian-mcp.yaml) | Atlassian Rovo (Jira, Confluence) integration |
 | [`zapier-mcp.yaml`](examples/platforms/zapier-mcp.yaml) | Zapier automation platform integration |
@@ -451,8 +409,8 @@ Restart Claude Desktop after editing. All tools from your stack are now availabl
 | [`openapi-basic.yaml`](examples/openapi/openapi-basic.yaml) | Turn a REST API into MCP tools via OpenAPI spec |
 | [`openapi-auth.yaml`](examples/openapi/openapi-auth.yaml) | OpenAPI with bearer token and API key auth |
 | [`code-mode-basic.yaml`](examples/code-mode/code-mode-basic.yaml) | Gateway code mode with search + execute meta-tools |
-| [`registry-basic.yaml`](examples/registry/registry-basic.yaml) | Agent Skills registry with a single server |
-| [`registry-advanced.yaml`](examples/registry/registry-advanced.yaml) | Cross-server Agent Skills |
+| [`registry-basic.yaml`](examples/registry/registry-basic.yaml) | Skills registry with a single server |
+| [`registry-advanced.yaml`](examples/registry/registry-advanced.yaml) | Cross-server skills |
 | [`workflow-basic`](examples/registry/items/workflow-basic/SKILL.md) | Executable skill workflow with sequential steps |
 | [`workflow-parallel`](examples/registry/items/workflow-parallel/SKILL.md) | Fan-out parallel execution with fan-in merge |
 | [`workflow-conditional`](examples/registry/items/workflow-conditional/SKILL.md) | Retry policies and error handling strategies |
@@ -463,19 +421,19 @@ Restart Claude Desktop after editing. All tools from your stack are now availabl
 |---------|--------|---------------|
 | MCP gateway (stdio, SSE, HTTP) | Stable | Backward compatible in 0.x |
 | Container orchestration (Docker) | Stable | Backward compatible in 0.x |
-| Config schema (servers, agents, resources) | Stable | Backward compatible in 0.x |
+| Config schema (servers, resources) | Stable | Backward compatible in 0.x |
 | Auth middleware (bearer, API key) | Stable | Backward compatible in 0.x |
 | Hot reload | Stable | Backward compatible in 0.x |
 | Vault secrets | Stable | Backward compatible in 0.x |
 | Web UI | Stable | No API guarantee (internal) |
 | Output format conversion | Stable | Backward compatible in 0.x |
 | Token usage metrics | Stable | Backward compatible in 0.x |
-| Code mode | Experimental | May change without notice |
-| A2A protocol | Experimental | May change without notice |
-| Podman runtime | Experimental | May change without notice |
-| Skills registry workflows | Experimental | May change without notice |
 | Stack validation (validate) | Stable | Backward compatible in 0.x |
 | Stack planning (plan) | Stable | Backward compatible in 0.x |
+| Code mode | Experimental | May change without notice |
+| Podman runtime | Experimental | May change without notice |
+| Skills registry workflows | Experimental | May change without notice |
+| Skill acceptance criteria (test) | Experimental | May change without notice |
 | Stack export (export) | Experimental | May change without notice |
 | Spec drift detection | Experimental | May change without notice |
 | Visual spec builder | Experimental | May change without notice |
@@ -485,7 +443,6 @@ Restart Claude Desktop after editing. All tools from your stack are now availabl
 ## ⚠️ Known Limitations
 
 - Podman rootless networking requires `slirp4netns` or `pasta` for inter-container communication
-- A2A protocol support is experimental and tracks the evolving spec
 - Code mode sandbox has no filesystem access (by design)
 - Skills registry is local-only with no remote discovery
 - Web UI requires a modern browser (no IE11 support)

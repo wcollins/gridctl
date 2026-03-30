@@ -6,14 +6,14 @@ Basic examples demonstrating core Gridctl features.
 
 | File | Description |
 |------|-------------|
-| `agent-basic.yaml` | MCP servers, agents, environment injection, tool access control |
-| `skills-basic.yaml` | `equipped_skills` alias and agents-as-tools pattern |
+| `mcp-basic.yaml` | Multiple MCP servers with tool filtering (recommended start) |
+| `skills-basic.yaml` | MCP server with skills registry integration |
 
 ## 🚀 Quick Start
 
 ```bash
-# Deploy the basic agent demo
-gridctl deploy examples/getting-started/agent-basic.yaml
+# Deploy the basic stack
+gridctl deploy examples/getting-started/mcp-basic.yaml
 
 # Check status
 gridctl status
@@ -22,14 +22,13 @@ gridctl status
 ## 📖 What You'll Learn
 
 - Defining MCP servers in a stack
-- Creating agents that consume MCP tools
-- Using `uses` to control tool access
-- Environment variable injection (`MCP_ENDPOINT`)
+- Server-level tool filtering with `tools:`
+- Environment variable expansion
 
 ## ℹ️ Note: Infrastructure vs Application Logic
 
 These examples use **placeholder containers** (`alpine:latest` with `sleep`) to demonstrate
-stack, networking, and access control—not actual agent or MCP server logic.
+stack structure and tool filtering — not actual MCP server logic.
 
 To see examples with real MCP servers:
 
