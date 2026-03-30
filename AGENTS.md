@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-Gridctl is an MCP (Model Context Protocol) orchestration tool - "Containerlab for AI Agents".
+Gridctl is an MCP (Model Context Protocol) orchestration tool — "Containerlab for MCP Infrastructure".
 
 **Architecture:**
 - Controller (Go): Reads stack.yaml, manages Docker containers
-- Gateway (Go): Protocol bridge that aggregates tools from downstream agents
+- Gateway (Go): Protocol bridge that aggregates tools from downstream MCP servers
 - UI (React + React Flow): Visualizes stack with real-time status
 
 ## Protocol Bridge Architecture
@@ -28,7 +28,7 @@ Gridctl's core value is acting as a **Protocol Bridge** between MCP transports:
            Stdio        │             │  HTTP
     (Docker Attach)     ▼             ▼  (POST /mcp)
               ┌─────────────┐   ┌─────────────┐
-              │   Agent A   │   │   Agent B   │
+              │  MCP Srv A  │   │  MCP Srv B  │
               │ (stdio MCP) │   │ (HTTP MCP)  │
               └─────────────┘   └─────────────┘
 ```
@@ -51,7 +51,7 @@ Gridctl runs as a host binary (like Containerlab, Terraform, Docker Compose), en
 ```
 ┌─────────────┐     ┌─────────────┐
 │  Network A  │     │  Network B  │
-│  (Agent 1)  │     │  (Agent 2)  │
+│ (MCP Srv 1) │     │ (MCP Srv 2) │
 └──────┬──────┘     └──────┬──────┘
        │   Docker Socket   │
        └─────────┬─────────┘
@@ -65,7 +65,7 @@ Gridctl runs as a host binary (like Containerlab, Terraform, Docker Compose), en
        └───────────────────┘
 ```
 
-Network isolation between agents while allowing communication through the MCP gateway.
+Network isolation between MCP servers while routing through the gateway.
 
 ## Directory Structure
 
@@ -83,6 +83,8 @@ gridctl/
 │   ├── vault.go          # Vault secret management commands
 │   ├── pins.go           # Schema pin management commands
 │   ├── traces.go         # Distributed traces CLI command (table, waterfall, follow)
+│   ├── test.go           # Skill acceptance criteria runner (exit 0/1/2)
+│   ├── activate.go       # Skill activation with acceptance criteria enforcement
 │   ├── version.go        # Version command
 │   ├── help.go           # Custom help template
 │   ├── embed.go          # Embedded web assets
@@ -96,8 +98,6 @@ gridctl/
 │       ├── vault.go      # Vault REST API endpoints
 │       └── pins.go       # Schema pins REST API endpoints
 ├── pkg/
-│   ├── adapter/          # Protocol adapters
-│   │   └── a2a_client.go # A2A client adapter
 │   ├── config/           # Stack YAML parsing
 │   │   ├── types.go      # Stack, Agent, Resource structs
 │   │   ├── loader.go     # LoadStack() function
@@ -170,11 +170,15 @@ gridctl/
 │   │   ├── codemode_search.go # Tool search index
 │   │   ├── codemode_sandbox.go # goja JavaScript sandbox
 │   │   └── codemode_transpile.go # esbuild ES2020+ → ES2015 transpilation
-│   ├── a2a/              # A2A (Agent-to-Agent) protocol
-│   │   ├── types.go      # A2A protocol types (AgentCard, Task, Message)
-│   │   ├── client.go     # HTTP client for remote A2A agents
-│   │   ├── handler.go    # HTTP handler for A2A endpoints
-│   │   └── gateway.go    # A2A gateway (local + remote agents)
+│   ├── skills/           # Remote skill management (import, update, lockfile)
+│   │   ├── config.go     # Skill source configuration
+│   │   ├── fingerprint.go # Content fingerprinting for change detection
+│   │   ├── importer.go   # Remote skill import (git clone/pull)
+│   │   ├── lockfile.go   # Lock file for pinned skill refs
+│   │   ├── origin.go     # Origin tracking per skill
+│   │   ├── remote.go     # Remote git operations
+│   │   ├── scanner.go    # Registry directory scanner
+│   │   └── updater.go    # Skill update orchestration
 │   ├── format/           # Output format converters
 │   │   ├── format.go     # Format() dispatcher (toon, csv, json, text)
 │   │   ├── toon.go       # TOON v3.0 converter (key-value, nested, tabular)
@@ -213,7 +217,6 @@ gridctl/
 │   ├── access-control/   # Tool filtering and security examples
 │   ├── code-mode/        # Code mode (search + execute meta-tools) examples
 │   ├── gateways/         # Gateway configuration examples
-│   ├── multi-agent/      # Multi-agent orchestration examples
 │   ├── platforms/        # Platform-specific examples
 │   ├── secrets-vault/    # Vault secrets and variable sets
 │   └── _mock-servers/    # Mock MCP servers for testing
@@ -246,7 +249,7 @@ make clean-mock-servers # Stop and remove mock MCP servers
 
 ```bash
 # Start a stack (runs as daemon, returns immediately)
-./gridctl deploy examples/getting-started/agent-basic.yaml
+./gridctl deploy examples/getting-started/mcp-basic.yaml
 
 # Start with options
 ./gridctl deploy stack.yaml --port 8180 --no-cache
@@ -273,7 +276,7 @@ make clean-mock-servers # Stop and remove mock MCP servers
 ./gridctl reload
 
 # Stop a specific stack (gateway + containers)
-./gridctl destroy examples/getting-started/agent-basic.yaml
+./gridctl destroy examples/getting-started/mcp-basic.yaml
 
 # Manage secrets
 ./gridctl vault set API_KEY
@@ -292,6 +295,10 @@ make clean-mock-servers # Stop and remove mock MCP servers
 ./gridctl pins verify --exit-code
 ./gridctl pins approve github
 ./gridctl pins reset github
+
+# Spec-driven skill development
+./gridctl test my-skill            # Run acceptance criteria (exit 0/1/2)
+./gridctl activate my-skill        # Promote from draft to active
 ```
 
 ### Command Reference
@@ -406,6 +413,24 @@ Manage TOFU schema pins that protect against rug pull attacks (CVE-2025-54136 cl
 | `--stack` | all | Stack name (auto-detected when only one stack is deployed) |
 | `--exit-code` | `verify` | Exit 1 if any server has drift (CI use case) |
 
+#### `gridctl test <skill-name>`
+
+Run acceptance criteria for a skill against the running gateway.
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--stack` | `-s` | Stack to test against (auto-detect if only one running) |
+
+Exit codes: `0` all criteria passed, `1` one or more criteria failed, `2` infrastructure error (gateway unreachable, skill not found).
+
+Acceptance criteria in `SKILL.md` frontmatter must follow the `GIVEN <context> WHEN <action> THEN <assertion>` format. Criteria that don't match the pattern are skipped.
+
+#### `gridctl activate <skill-name>`
+
+Transition a skill from draft to active state. Executable skills (those with a `workflow` block) must have `acceptance_criteria` defined before activation is permitted.
+
+Exit codes: `0` activated, `1` blocked by missing acceptance criteria or validation error.
+
 ### Daemon Mode
 
 By default, `gridctl deploy` runs the MCP gateway as a background daemon:
@@ -440,7 +465,7 @@ When `gridctl deploy` runs, it:
 2. Creates Docker network
 3. Builds/pulls images
 4. Starts containers with host port bindings (9000+)
-5. Registers agents with the MCP gateway
+5. Registers MCP servers with the gateway
 6. Starts HTTP server with MCP endpoint
 
 **Endpoints:**
@@ -448,9 +473,7 @@ When `gridctl deploy` runs, it:
 - **API:** `/api/status`, `/api/mcp-servers`, `/api/mcp-servers/{name}/restart`, `/api/tools`, `/api/logs`, `/api/clients`, `/api/reload`, `/api/metrics/tokens`, `/health`, `/ready`
 - **Vault:** `/api/vault`, `/api/vault/status`, `/api/vault/unlock`, `/api/vault/lock`, `/api/vault/sets`, `/api/vault/import`
 - **Pins:** `/api/pins` (list all), `/api/pins/{server}` (get), `/api/pins/{server}/approve` (POST), `/api/pins/{server}` (DELETE)
-- **Agents:** `/api/agents/{name}/logs`, `/api/agents/{name}/restart`, `/api/agents/{name}/stop`
-- **A2A:** `/.well-known/agent.json`, `/a2a/` (list agents), `/a2a/{agent}` (GET card, POST JSON-RPC)
-- **Registry:** `/api/registry/status`, `/api/registry/skills[/{name}]`, `/api/registry/skills/{name}/files[/{path}]`, `/api/registry/skills/validate`, `/api/registry/skills/{name}/workflow`, `/api/registry/skills/{name}/execute`, `/api/registry/skills/{name}/validate-workflow`
+- **Registry:** `/api/registry/status`, `/api/registry/skills[/{name}]`, `/api/registry/skills/{name}/files[/{path}]`, `/api/registry/skills/validate`, `/api/registry/skills/{name}/workflow`, `/api/registry/skills/{name}/execute`, `/api/registry/skills/{name}/validate-workflow`, `/api/registry/skills/{name}/test`
 - **Traces:** `/api/traces`, `/api/traces/{traceId}`
 - **Web UI:** `GET /`
 
@@ -464,11 +487,6 @@ When `gridctl deploy` runs, it:
 
 **Reload API:**
 - `POST /api/reload` - Triggers hot reload of the stack configuration (requires `--watch` flag on deploy)
-
-**Agent Control API:**
-- `GET /api/agents/{name}/logs` - Returns container logs for an agent
-- `POST /api/agents/{name}/restart` - Restart an agent container
-- `POST /api/agents/{name}/stop` - Stop an agent container
 
 **MCP Server Control API:**
 - `POST /api/mcp-servers/{name}/restart` - Restart an individual MCP server connection
@@ -493,6 +511,13 @@ When `gridctl deploy` runs, it:
 - `GET /api/registry/skills/{name}/workflow` - Get parsed workflow definition with DAG levels
 - `POST /api/registry/skills/{name}/execute` - Execute a workflow skill (returns ToolCallResult)
 - `POST /api/registry/skills/{name}/validate-workflow` - Dry-run validation without execution
+
+**Skill Test API:**
+- `POST /api/registry/skills/{name}/test` - Run acceptance criteria for a skill
+  - Returns `SkillTestResult` with `skill`, `passed`, `failed`, `skipped`, and `results[]`
+  - Each result has `criterion`, `passed`, `skipped`, `skip_reason`, and `actual`
+  - HTTP 400 if the skill has no acceptance criteria defined
+  - HTTP 404 if skill not found
 
 **Vault API:**
 - `GET /api/vault/status` - Returns `{locked, encrypted, secrets_count?, sets_count?}`
@@ -619,21 +644,6 @@ mcp-servers:
         include: ["getUser", "listItems"]         # Whitelist operation IDs
         # exclude: ["deleteUser"]                 # Or blacklist operation IDs
 
-agents:                               # Active agents that consume MCP tools
-  - name: my-agent
-    image: my-org/agent:latest
-    description: "Agent description"
-    capabilities:
-      - code-analysis
-      - automation
-    uses:                             # MCP servers this agent can access (alias: equipped_skills)
-      - http-server                   # String format: all tools from server
-      - server: stdio-server          # Object format: with tool filtering
-        tools: ["read", "list"]       # Only these tools (agent-level filtering)
-    command: ["python", "agent.py"]   # Optional: override container command
-    env:
-      MODEL_NAME: "claude-3-5-sonnet"
-
 resources:                            # Non-MCP containers (databases, etc.)
   - name: postgres
     image: postgres:16
@@ -641,69 +651,18 @@ resources:                            # Non-MCP containers (databases, etc.)
       POSTGRES_PASSWORD: secret
 ```
 
-### Agents
+### Tool Filtering
 
-Agents are active containers that consume tools from MCP servers. They receive:
-- `MCP_ENDPOINT` environment variable injected automatically (e.g., `http://host.docker.internal:8180`)
-- Tool access control based on their `uses` field (can only access tools from listed servers)
-
-#### Tool Filtering
-
-Gridctl supports two levels of tool filtering for implementing least-privilege access:
-
-1. **Server-Level Filtering**: Use the `tools` field on MCP servers to restrict which tools are exposed system-wide
-2. **Agent-Level Filtering**: Use the object format in `uses` to restrict which tools each agent can access
+Use the `tools` field on MCP servers to whitelist which tools are exposed system-wide — unauthorized tools never enter the gateway:
 
 ```yaml
 mcp-servers:
-  - name: file-server
-    image: file-mcp:latest
-    port: 3000
-    tools: ["read", "list"]   # Server-level: only expose these tools to ALL agents
-
-agents:
-  - name: code-reviewer
-    image: my-org/reviewer:v1
-    description: "Reviews PRs and leaves comments"
-    capabilities: ["code-analysis", "git-ops"]
-    uses:
-      - github-tools           # String format: all tools from this server
-      - server: file-server    # Object format: agent-level filtering
-        tools: ["read"]        # Only "read" tool (even though server exposes "read" and "list")
-    command: ["python", "run.py"]
+  - name: github
+    image: ghcr.io/github/github-mcp-server:latest
+    transport: stdio
+    tools: ["get_file_contents", "search_code", "list_commits", "get_issue"]
     env:
-      MODEL_NAME: "claude-3-5-sonnet"
-
-  # Headless agent - NOT YET IMPLEMENTED (schema validation only)
-  # - name: headless-agent
-  #   runtime: claude-code       # Uses built-in runtime instead of image
-  #   prompt: |
-  #     You are a helpful assistant that can use tools.
-  #   uses:
-  #     - github-tools
-
-  # Agent with A2A capabilities
-  - name: a2a-enabled-agent
-    image: my-org/agent:v1
-    a2a:                        # Exposes this agent via A2A protocol
-      enabled: true
-      version: "1.0.0"
-      skills:
-        - id: code-review
-          name: Code Review
-          description: "Review code for issues"
-        - id: summarize
-          name: Summarize
-          description: "Summarize content"
-
-# External A2A agents (remote agents accessible via URL)
-a2a-agents:
-  - name: external-agent
-    url: https://example.com/agent
-    auth:
-      type: bearer              # or "api_key"
-      token_env: "A2A_TOKEN"    # Environment variable containing the token
-      # header_name: "X-API-Key" # for api_key type (default: "Authorization")
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
 ```
 
 ### Advanced Mode (Multiple Networks)
@@ -762,6 +721,10 @@ name: my-workflow
 description: What the workflow does
 allowed-tools: server__tool1, server__tool2
 state: active
+
+acceptance_criteria:
+  - GIVEN a valid input WHEN the skill is called THEN the output contains expected data
+  - GIVEN an invalid input WHEN the skill is called THEN an error is returned
 
 inputs:
   param_name:
@@ -884,7 +847,6 @@ All managed resources use these labels:
 - `gridctl.managed=true`
 - `gridctl.stack={name}`
 - `gridctl.mcp-server={name}` (for MCP server containers)
-- `gridctl.agent={name}` (for agent containers)
 - `gridctl.resource={name}` (for resource containers)
 
 ## Testing Requirements
