@@ -49,6 +49,7 @@ type Server struct {
 	authHeader     string
 
 	gatewayAddr        string // e.g. "http://localhost:8180" — used to build MCP config for CLI proxy
+	tokenizerName      string // active tokenizer mode: "embedded" or "api"
 }
 
 // NewServer creates a new API server.
@@ -153,6 +154,11 @@ func (s *Server) SetGatewayAddr(addr string) {
 	s.gatewayAddr = addr
 }
 
+// SetTokenizerName sets the active tokenizer mode for display in /api/status.
+func (s *Server) SetTokenizerName(name string) {
+	s.tokenizerName = name
+}
+
 // RegistryServer returns the registry server.
 func (s *Server) RegistryServer() *registry.Server {
 	return s.registryServer
@@ -249,8 +255,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		TokenUsage *metrics.TokenUsage      `json:"token_usage,omitempty"`
 	}{
 		Gateway: ServerInfo{
-			Name:    s.gateway.ServerInfo().Name,
-			Version: s.gateway.ServerInfo().Version,
+			Name:      s.gateway.ServerInfo().Name,
+			Version:   s.gateway.ServerInfo().Version,
+			Tokenizer: s.tokenizerName,
 		},
 		MCPServers: s.getMCPServerStatuses(),
 		Resources:  s.getResourceStatuses(),
@@ -311,8 +318,9 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 
 // ServerInfo mirrors the mcp.ServerInfo type for API responses.
 type ServerInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Tokenizer string `json:"tokenizer,omitempty"`
 }
 
 // MCPServerStatus mirrors the mcp.MCPServerStatus type for API responses.
