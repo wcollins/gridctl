@@ -12,6 +12,7 @@ export interface ToolSelector {
 export interface ServerInfo {
   name: string;
   version: string;
+  tokenizer?: string; // active tokenizer mode: "embedded" or "api"
 }
 
 // MCP Server status matching mcp.MCPServerStatus

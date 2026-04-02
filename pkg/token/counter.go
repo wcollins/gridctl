@@ -1,7 +1,23 @@
 // Package token provides token counting for MCP tool call content.
+//
+// The default implementation uses cl100k_base (the BPE vocabulary used by
+// GPT-4 and related models). Claude 3+ uses a different, unpublished vocabulary,
+// so cl100k_base counts are an approximation for Claude models — typically within
+// 10-15% for English and code content. This is intentional: the interface exists
+// to allow swapping implementations without changing consumers, and cl100k_base
+// is a meaningful improvement over the 4-bytes/token heuristic it replaces.
+//
+// Users who need exact Claude token counts can enable gateway.tokenizer: api
+// in their stack.yaml, which routes counting through Anthropic's count_tokens
+// endpoint (Anthropic-specific, requires network access).
 package token
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/tiktoken-go/tokenizer"
+)
 
 // Counter estimates token counts for text content.
 // Implementations may vary in accuracy — the interface allows swapping
@@ -45,4 +61,40 @@ func CountJSON(c Counter, v any) int {
 		return 0
 	}
 	return c.Count(string(data))
+}
+
+// TiktokenCounter counts tokens using the cl100k_base BPE encoding.
+// This is the vocabulary used by GPT-4 and related models and is a close
+// approximation for Claude models (whose vocabulary is unpublished).
+type TiktokenCounter struct {
+	enc tokenizer.Codec
+}
+
+// NewTiktokenCounter creates a counter using the cl100k_base encoding.
+// The vocabulary is loaded eagerly at construction time to surface any
+// initialization failure at startup rather than during request handling.
+func NewTiktokenCounter() (*TiktokenCounter, error) {
+	enc, err := tokenizer.Get(tokenizer.Cl100kBase)
+	if err != nil {
+		return nil, fmt.Errorf("token: failed to load cl100k_base vocabulary: %w", err)
+	}
+	// Force eager loading: encode a test string and discard the result so
+	// any lazy initialization happens now, not on the first tool call.
+	if _, _, err := enc.Encode("hello"); err != nil {
+		return nil, fmt.Errorf("token: cl100k_base warm-up failed: %w", err)
+	}
+	return &TiktokenCounter{enc: enc}, nil
+}
+
+// Count returns the token count for the given text using cl100k_base encoding.
+func (c *TiktokenCounter) Count(text string) int {
+	if text == "" {
+		return 0
+	}
+	ids, _, err := c.enc.Encode(text)
+	if err != nil {
+		// Encoding errors are unexpected; fall back to a rough estimate.
+		return (len(text) + 3) / 4
+	}
+	return len(ids)
 }
