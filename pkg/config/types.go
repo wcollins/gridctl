@@ -80,6 +80,15 @@ type GatewayConfig struct {
 
 	// Security configures security features such as schema pinning. When nil, defaults apply.
 	Security *GatewaySecurityConfig `yaml:"security,omitempty" json:"security,omitempty"`
+
+	// Tokenizer selects the token counting strategy.
+	// Values: "embedded" (default) uses the cl100k_base BPE vocabulary (pure Go, no network).
+	// "api" uses Anthropic's count_tokens endpoint for exact counts — Anthropic-specific,
+	// requires network access and an API key, wrong for non-Anthropic model routing.
+	Tokenizer string `yaml:"tokenizer,omitempty"`
+	// TokenizerAPIKey overrides ANTHROPIC_API_KEY for the api tokenizer mode.
+	// When unset, the api tokenizer falls back to the ANTHROPIC_API_KEY environment variable.
+	TokenizerAPIKey string `yaml:"tokenizer_api_key,omitempty"`
 }
 
 // GatewaySecurityConfig holds gateway-level security settings.
@@ -269,6 +278,10 @@ func (s *Stack) NonContainerWorkloads() []string {
 func (s *Stack) SetDefaults() {
 	if s.Version == "" {
 		s.Version = "1"
+	}
+
+	if s.Gateway != nil && s.Gateway.Tokenizer == "" {
+		s.Gateway.Tokenizer = "embedded"
 	}
 
 	// Progressive network defaults:
