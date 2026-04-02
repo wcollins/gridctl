@@ -4,6 +4,7 @@ import type { Node, Edge, NodeChange, EdgeChange } from '@xyflow/react';
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react';
 import type {
   GatewayStatus,
+  ServerInfo,
   MCPServerStatus,
   ResourceStatus,
   ClientStatus,
@@ -17,7 +18,7 @@ import { useUIStore } from './useUIStore';
 
 interface StackState {
   // === Raw API Data ===
-  gatewayInfo: { name: string; version: string } | null;
+  gatewayInfo: ServerInfo | null;
   mcpServers: MCPServerStatus[];
   resources: ResourceStatus[];
   clients: ClientStatus[];  // Detected/linked LLM clients

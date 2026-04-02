@@ -11,6 +11,7 @@ export function StatusBar() {
   const sessions = useStackStore((s) => s.sessions);
   const codeMode = useStackStore((s) => s.codeMode);
   const tokenUsage = useStackStore((s) => s.tokenUsage);
+  const tokenizerName = useStackStore((s) => s.gatewayInfo?.tokenizer);
   const connectionStatus = useStackStore((s) => s.connectionStatus);
   const lastUpdated = useStackStore((s) => s.lastUpdated);
   const error = useStackStore((s) => s.error);
@@ -101,6 +102,13 @@ export function StatusBar() {
               <span className="text-primary font-semibold">{formatCompactNumber(tokenUsage.session.total_tokens)}</span>
               <span className="ml-1">tokens</span>
             </span>
+          </div>
+        )}
+
+        {/* Tokenizer mode indicator */}
+        {tokenizerName && (
+          <div className="flex items-center gap-2 text-text-muted">
+            <span className="text-text-muted/60 font-medium">{tokenizerName}</span>
           </div>
         )}
 
