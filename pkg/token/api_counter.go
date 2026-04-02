@@ -15,11 +15,11 @@ const (
 	anthropicEndpoint = "https://api.anthropic.com"
 
 	// countTokensPath is the path for the token counting endpoint.
-	countTokensPath = "/v1/messages/count_tokens"
+	countTokensPath = "/v1/messages/count_tokens" //nolint:gosec // URL path, not a credential
 
 	// countTokensModel is the model used for token counting requests.
 	// The model affects tokenization; claude-3-5-haiku is stable and low-cost.
-	countTokensModel = "claude-3-5-haiku-20241022"
+	countTokensModel = "claude-3-5-haiku-20241022" //nolint:gosec // model name, not a credential
 )
 
 // APICounter counts tokens via Anthropic's count_tokens endpoint.
