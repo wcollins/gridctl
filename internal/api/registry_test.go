@@ -338,6 +338,66 @@ func TestHandleRegistry_ActivateSkill_NotFound(t *testing.T) {
 	}
 }
 
+func TestHandleRegistry_ActivateSkill_MalformedCriteria(t *testing.T) {
+	srv, regServer := setupRegistryTestServer(t)
+
+	// Seed an executable skill (has a workflow) with only malformed criteria.
+	sk := &registry.AgentSkill{
+		Name:        "bad-criteria-skill",
+		Description: "Skill with malformed acceptance criteria",
+		State:       registry.StateDraft,
+		Workflow:    []registry.WorkflowStep{{ID: "step1", Tool: "server__tool"}},
+		AcceptanceCriteria: []string{
+			"GIVN a context WHEN called THEN ok",
+			"the skill is fast",
+		},
+	}
+	if err := regServer.Store().SaveSkill(sk); err != nil {
+		t.Fatalf("failed to seed skill: %v", err)
+	}
+
+	handler := srv.Handler()
+	req := httptest.NewRequest(http.MethodPost, "/api/registry/skills/bad-criteria-skill/activate", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "0 of 2 criteria match GIVEN") {
+		t.Errorf("expected malformed-criteria error, got: %s", body)
+	}
+}
+
+func TestHandleRegistry_ActivateSkill_MixedCriteria(t *testing.T) {
+	srv, regServer := setupRegistryTestServer(t)
+
+	// Seed an executable skill with one valid and one malformed criterion — should activate.
+	sk := &registry.AgentSkill{
+		Name:        "mixed-criteria-skill",
+		Description: "Skill with one valid and one malformed criterion",
+		State:       registry.StateDraft,
+		Workflow:    []registry.WorkflowStep{{ID: "step1", Tool: "server__tool"}},
+		AcceptanceCriteria: []string{
+			"GIVEN a context WHEN the skill is called THEN is not empty",
+			"GIVN a context WHEN called THEN ok",
+		},
+	}
+	if err := regServer.Store().SaveSkill(sk); err != nil {
+		t.Fatalf("failed to seed skill: %v", err)
+	}
+
+	handler := srv.Handler()
+	req := httptest.NewRequest(http.MethodPost, "/api/registry/skills/mixed-criteria-skill/activate", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for skill with at least one valid criterion, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // --- No registry server ---
 
 func TestHandleRegistry_NoRegistryServer(t *testing.T) {
