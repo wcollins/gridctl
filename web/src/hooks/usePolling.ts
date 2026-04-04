@@ -3,8 +3,12 @@ import { useStackStore } from '../stores/useStackStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useRegistryStore } from '../stores/useRegistryStore';
 import { usePinsStore } from '../stores/usePinsStore';
+import { useUIStore } from '../stores/useUIStore';
 import { fetchStatus, fetchTools, fetchClients, fetchRegistryStatus, fetchRegistrySkills, fetchServerPins, AuthError } from '../lib/api';
+import { showToast } from '../components/ui/Toast';
 import { POLLING } from '../lib/constants';
+
+let _prevDriftCount = 0;
 
 export function usePolling() {
   const intervalRef = useRef<number | null>(null);
@@ -45,6 +49,15 @@ export function usePolling() {
         usePinsStore.getState().setPins(pins);
         // Re-apply pin state to nodes built from the status fetch above
         useStackStore.getState().refreshNodesAndEdges();
+
+        const driftedCount = Object.values(pins).filter((sp) => sp.status === 'drift').length;
+        if (driftedCount > 0 && _prevDriftCount === 0) {
+          showToast('warning', `Schema drift detected on ${driftedCount} server${driftedCount > 1 ? 's' : ''}`, {
+            action: { label: 'View', onClick: () => useUIStore.getState().setBottomPanelTab('pins') },
+            duration: 6000,
+          });
+        }
+        _prevDriftCount = driftedCount;
       } catch {
         // Pins endpoint unavailable (feature not enabled) — suppress silently
       }
