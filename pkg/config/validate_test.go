@@ -975,3 +975,71 @@ func TestValidationErrors_String(t *testing.T) {
 		t.Errorf("expected both errors in output, got %q", result)
 	}
 }
+
+func TestValidate_SSH_NewFields(t *testing.T) {
+	base := func(ssh *SSHConfig) *Stack {
+		return &Stack{
+			Name:    "test",
+			Network: Network{Name: "net"},
+			MCPServers: []MCPServer{{
+				Name:    "srv",
+				SSH:     ssh,
+				Command: []string{"/opt/server"},
+			}},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		ssh     *SSHConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid SSH with no new fields",
+			ssh:  &SSHConfig{Host: "10.0.0.1", User: "mcp"},
+		},
+		{
+			name:    "knownHostsFile pointing to missing file",
+			ssh:     &SSHConfig{Host: "10.0.0.1", User: "mcp", KnownHostsFile: "/nonexistent/known_hosts"},
+			wantErr: true,
+			errMsg:  "knownHostsFile",
+		},
+		{
+			name: "jumpHost with valid value",
+			ssh:  &SSHConfig{Host: "10.0.0.1", User: "mcp", JumpHost: "bastion.example.com"},
+		},
+		{
+			name: "jumpHost with user@host format",
+			ssh:  &SSHConfig{Host: "10.0.0.1", User: "mcp", JumpHost: "admin@bastion.example.com"},
+		},
+		{
+			name:    "jumpHost with shell metacharacter",
+			ssh:     &SSHConfig{Host: "10.0.0.1", User: "mcp", JumpHost: "bastion.example.com; rm -rf /"},
+			wantErr: true,
+			errMsg:  "jumpHost",
+		},
+		{
+			name:    "jumpHost with pipe character",
+			ssh:     &SSHConfig{Host: "10.0.0.1", User: "mcp", JumpHost: "bastion|evil.com"},
+			wantErr: true,
+			errMsg:  "jumpHost",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Validate(base(tc.ssh))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tc.errMsg != "" && !strings.Contains(err.Error(), tc.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tc.errMsg, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
