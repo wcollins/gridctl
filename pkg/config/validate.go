@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -205,6 +206,16 @@ func Validate(s *Stack) error {
 			}
 			if server.SSH.Port < 0 || server.SSH.Port > 65535 {
 				errs = append(errs, ValidationError{sshPrefix + ".port", "must be between 0 and 65535"})
+			}
+			if server.SSH.KnownHostsFile != "" {
+				if _, err := os.Stat(server.SSH.KnownHostsFile); err != nil {
+					errs = append(errs, ValidationError{sshPrefix + ".knownHostsFile", fmt.Sprintf("file not found or not readable: %s", server.SSH.KnownHostsFile)})
+				}
+			}
+			if server.SSH.JumpHost != "" {
+				if strings.ContainsAny(server.SSH.JumpHost, " \t\n;|&$`") {
+					errs = append(errs, ValidationError{sshPrefix + ".jumpHost", "invalid format"})
+				}
 			}
 			// Transport must be stdio for SSH servers (they use stdin/stdout over SSH)
 			if server.Transport != "" && server.Transport != "stdio" {
