@@ -170,10 +170,12 @@ type OperationsFilter struct {
 
 // SSHConfig defines SSH connection parameters for remote MCP servers.
 type SSHConfig struct {
-	Host         string `yaml:"host"`                    // Required: hostname or IP address
-	User         string `yaml:"user"`                    // Required: SSH username
-	Port         int    `yaml:"port,omitempty"`          // Optional: SSH port (default 22)
-	IdentityFile string `yaml:"identityFile,omitempty"`  // Optional: path to SSH private key
+	Host           string `yaml:"host"`                        // Required: hostname or IP address
+	User           string `yaml:"user"`                        // Required: SSH username
+	Port           int    `yaml:"port,omitempty"`              // Optional: SSH port (default 22)
+	IdentityFile   string `yaml:"identityFile,omitempty"`      // Optional: path to SSH private key
+	KnownHostsFile string `yaml:"knownHostsFile,omitempty"`    // Optional: path to known_hosts file; enables StrictHostKeyChecking=yes
+	JumpHost       string `yaml:"jumpHost,omitempty"`          // Optional: bastion/jump host ([user@]host[:port])
 }
 
 // IsExternal returns true if this is an external MCP server (URL-only, no container).
