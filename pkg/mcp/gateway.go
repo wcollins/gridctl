@@ -38,10 +38,12 @@ type MCPServerConfig struct {
 	Command         []string          // For local process or SSH transport
 	WorkDir         string            // For local process transport
 	Env             map[string]string // For local process or SSH transport
-	SSHHost         string            // SSH hostname (for SSH servers)
-	SSHUser         string            // SSH username (for SSH servers)
-	SSHPort         int               // SSH port (for SSH servers, 0 = default 22)
-	SSHIdentityFile string            // SSH identity file path (for SSH servers)
+	SSHHost            string            // SSH hostname (for SSH servers)
+	SSHUser            string            // SSH username (for SSH servers)
+	SSHPort            int               // SSH port (for SSH servers, 0 = default 22)
+	SSHIdentityFile    string            // SSH identity file path (for SSH servers)
+	SSHKnownHostsFile  string            // SSH known_hosts file path; enables StrictHostKeyChecking=yes
+	SSHJumpHost        string            // SSH jump/bastion host ([user@]host[:port])
 	OpenAPIConfig   *OpenAPIClientConfig // OpenAPI configuration (for OpenAPI servers)
 	Tools           []string          // Tool whitelist (empty = all tools)
 	OutputFormat    string            // Output format: "json", "toon", "csv", "text"
@@ -1142,7 +1144,14 @@ func resolveNetworkTransport(cfg MCPServerConfig, hasMeta bool) string {
 
 // buildSSHCommand constructs the ssh command with all options.
 func buildSSHCommand(cfg MCPServerConfig) []string {
-	args := []string{"ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"}
+	args := []string{"ssh", "-o", "BatchMode=yes"}
+
+	// Use strict host key checking when a known_hosts file is provided; otherwise TOFU.
+	if cfg.SSHKnownHostsFile != "" {
+		args = append(args, "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile="+cfg.SSHKnownHostsFile)
+	} else {
+		args = append(args, "-o", "StrictHostKeyChecking=accept-new")
+	}
 
 	// Add identity file if specified
 	if cfg.SSHIdentityFile != "" {
@@ -1152,6 +1161,11 @@ func buildSSHCommand(cfg MCPServerConfig) []string {
 	// Add port if non-default
 	if cfg.SSHPort > 0 && cfg.SSHPort != 22 {
 		args = append(args, "-p", strconv.Itoa(cfg.SSHPort))
+	}
+
+	// Add jump host (bastion) if specified
+	if cfg.SSHJumpHost != "" {
+		args = append(args, "-J", cfg.SSHJumpHost)
 	}
 
 	// Add user@host
