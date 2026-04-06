@@ -1776,6 +1776,37 @@ func TestGateway_buildSSHCommand(t *testing.T) {
 				Command: []string{"/opt/server"},
 			},
 		},
+		{
+			name: "SSH with known_hosts file enables strict checking",
+			cfg: MCPServerConfig{
+				SSHUser:           "admin",
+				SSHHost:           "10.0.0.1",
+				SSHKnownHostsFile: "/etc/ssh/known_hosts",
+				Command:           []string{"/opt/server"},
+			},
+			contains: []string{"StrictHostKeyChecking=yes", "UserKnownHostsFile=/etc/ssh/known_hosts"},
+		},
+		{
+			name: "SSH with jump host",
+			cfg: MCPServerConfig{
+				SSHUser:     "admin",
+				SSHHost:     "10.0.0.1",
+				SSHJumpHost: "bastion.example.com",
+				Command:     []string{"/opt/server"},
+			},
+			contains: []string{"-J", "bastion.example.com"},
+		},
+		{
+			name: "SSH with jump host and known_hosts file",
+			cfg: MCPServerConfig{
+				SSHUser:           "admin",
+				SSHHost:           "10.0.0.1",
+				SSHJumpHost:       "user@bastion.example.com",
+				SSHKnownHostsFile: "~/.ssh/gridctl_known_hosts",
+				Command:           []string{"/opt/server"},
+			},
+			contains: []string{"-J", "user@bastion.example.com", "StrictHostKeyChecking=yes", "UserKnownHostsFile=~/.ssh/gridctl_known_hosts"},
+		},
 	}
 
 	for _, tc := range tests {
@@ -1802,6 +1833,32 @@ func TestGateway_buildSSHCommand(t *testing.T) {
 					if arg == "-p" {
 						t.Error("should not include -p for default port 22")
 					}
+				}
+			}
+			// knownHostsFile must not coexist with accept-new
+			if tc.cfg.SSHKnownHostsFile != "" {
+				for _, arg := range result {
+					if arg == "StrictHostKeyChecking=accept-new" {
+						t.Error("StrictHostKeyChecking=accept-new must not appear when knownHostsFile is set")
+					}
+				}
+			}
+			// -J must appear before user@host
+			if tc.cfg.SSHJumpHost != "" {
+				jIdx, hostIdx := -1, -1
+				for i, arg := range result {
+					if arg == "-J" {
+						jIdx = i
+					}
+					if arg == tc.cfg.SSHUser+"@"+tc.cfg.SSHHost {
+						hostIdx = i
+					}
+				}
+				if jIdx == -1 {
+					t.Error("expected -J flag in command")
+				}
+				if hostIdx != -1 && jIdx > hostIdx {
+					t.Errorf("-J (pos %d) must appear before user@host (pos %d)", jIdx, hostIdx)
 				}
 			}
 		})
