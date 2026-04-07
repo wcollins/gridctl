@@ -247,8 +247,25 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/wizard/drafts", s.handleWizardDraftCreate)
 	mux.HandleFunc("DELETE /api/wizard/drafts/{id}", s.handleWizardDraftDelete)
 
-	// Registry endpoints (always registered, even when registry is empty)
-	mux.HandleFunc("/api/registry/", s.handleRegistry)
+	// Registry endpoints
+	mux.HandleFunc("GET /api/registry/status", s.handleRegistryStatus)
+	mux.HandleFunc("GET /api/registry/skills", s.handleRegistrySkillsList)
+	mux.HandleFunc("POST /api/registry/skills", s.handleRegistrySkillCreate)
+	mux.HandleFunc("POST /api/registry/skills/validate", s.handleRegistryValidate)
+	mux.HandleFunc("GET /api/registry/skills/{name}", s.handleRegistrySkillGet)
+	mux.HandleFunc("PUT /api/registry/skills/{name}", s.handleRegistrySkillPut)
+	mux.HandleFunc("DELETE /api/registry/skills/{name}", s.handleRegistrySkillDelete)
+	mux.HandleFunc("POST /api/registry/skills/{name}/activate", s.handleRegistrySkillActivate)
+	mux.HandleFunc("POST /api/registry/skills/{name}/disable", s.handleRegistrySkillDisable)
+	mux.HandleFunc("GET /api/registry/skills/{name}/workflow", s.handleRegistrySkillWorkflow)
+	mux.HandleFunc("POST /api/registry/skills/{name}/execute", s.handleRegistrySkillExecute)
+	mux.HandleFunc("POST /api/registry/skills/{name}/validate-workflow", s.handleRegistrySkillValidateWorkflow)
+	mux.HandleFunc("GET /api/registry/skills/{name}/test", s.handleRegistrySkillTest)
+	mux.HandleFunc("POST /api/registry/skills/{name}/test", s.handleRegistrySkillTest)
+	mux.HandleFunc("GET /api/registry/skills/{name}/files", s.handleRegistrySkillFileList)
+	mux.HandleFunc("GET /api/registry/skills/{name}/files/{path...}", s.handleRegistrySkillFileGet)
+	mux.HandleFunc("PUT /api/registry/skills/{name}/files/{path...}", s.handleRegistrySkillFilePut)
+	mux.HandleFunc("DELETE /api/registry/skills/{name}/files/{path...}", s.handleRegistrySkillFileDelete)
 
 	// Static files (UI) - served at root
 	if s.staticFS != nil {
