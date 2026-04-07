@@ -120,7 +120,7 @@ func TestExecutor_MultiStepDAG(t *testing.T) {
 			ID:        "step2",
 			Tool:      "test-dag__echo",
 			DependsOn: registry.StringOrSlice{"step1"},
-			Args:      map[string]any{"message": "{{ .Steps.step1.Result }}"},
+			Args:      map[string]any{"message": "{{ steps.step1.result }}"},
 		},
 	})
 	if err := store.SaveSkill(skill); err != nil {
