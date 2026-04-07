@@ -203,8 +203,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/ready", s.handleReady)
 
 	// Pins endpoints
-	mux.HandleFunc("/api/pins/", s.handlePins)
-	mux.HandleFunc("/api/pins", s.handlePins)
+	mux.HandleFunc("GET /api/pins", s.handleListPins)
+	mux.HandleFunc("GET /api/pins/{server}", s.handleGetServerPins)
+	mux.HandleFunc("POST /api/pins/{server}/approve", s.handleApprovePins)
+	mux.HandleFunc("DELETE /api/pins/{server}", s.handleResetPins)
 
 	// Vault endpoints
 	mux.HandleFunc("/api/vault/", s.handleVault)
