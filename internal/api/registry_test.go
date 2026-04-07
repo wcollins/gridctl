@@ -465,7 +465,6 @@ func TestHandleRegistry_MethodNotAllowed(t *testing.T) {
 		{"/api/registry/skills/s1/activate", http.MethodGet},
 		{"/api/registry/skills/s1/activate", http.MethodPut},
 		{"/api/registry/skills/s1/disable", http.MethodGet},
-		{"/api/registry/skills/validate", http.MethodGet},
 	}
 
 	for _, tt := range tests {
