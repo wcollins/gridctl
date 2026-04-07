@@ -224,7 +224,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/skills/", s.handleSkills)
 
 	// Wizard endpoints
-	mux.HandleFunc("/api/wizard/", s.handleWizard)
+	mux.HandleFunc("GET /api/wizard/drafts", s.handleWizardDraftsList)
+	mux.HandleFunc("POST /api/wizard/drafts", s.handleWizardDraftCreate)
+	mux.HandleFunc("DELETE /api/wizard/drafts/{id}", s.handleWizardDraftDelete)
 
 	// Registry endpoints (always registered, even when registry is empty)
 	mux.HandleFunc("/api/registry/", s.handleRegistry)
