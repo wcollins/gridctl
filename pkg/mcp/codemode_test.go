@@ -418,6 +418,93 @@ func TestGateway_CodeMode_Off(t *testing.T) {
 	}
 }
 
+func TestSandbox_Sleep(t *testing.T) {
+	sandbox := NewSandbox(5 * time.Second)
+	caller := &mockToolCaller{
+		callFn: func(ctx context.Context, name string, arguments map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{}, nil
+		},
+	}
+
+	code := `(async () => { await sleep(50); console.log("slept"); })()`
+	result, err := sandbox.Execute(context.Background(), code, caller, nil)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if len(result.Console) != 1 || result.Console[0] != "slept" {
+		t.Errorf("Expected console output ['slept'], got: %v", result.Console)
+	}
+}
+
+func TestSandbox_SetTimeout(t *testing.T) {
+	sandbox := NewSandbox(5 * time.Second)
+	caller := &mockToolCaller{
+		callFn: func(ctx context.Context, name string, arguments map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{}, nil
+		},
+	}
+
+	// setTimeout fires after the current sync code; sleep gives it time to run
+	code := `(async () => {
+		setTimeout(() => { console.log("timeout fired"); }, 10);
+		await sleep(100);
+	})()`
+	result, err := sandbox.Execute(context.Background(), code, caller, nil)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	found := false
+	for _, line := range result.Console {
+		if line == "timeout fired" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Expected 'timeout fired' in console output, got: %v", result.Console)
+	}
+}
+
+func TestSandbox_ClearTimeout(t *testing.T) {
+	sandbox := NewSandbox(5 * time.Second)
+	caller := &mockToolCaller{
+		callFn: func(ctx context.Context, name string, arguments map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{}, nil
+		},
+	}
+
+	code := `(async () => {
+		const id = setTimeout(() => { console.log("should not fire"); }, 10);
+		clearTimeout(id);
+		await sleep(100);
+	})()`
+	result, err := sandbox.Execute(context.Background(), code, caller, nil)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	for _, line := range result.Console {
+		if line == "should not fire" {
+			t.Error("clearTimeout did not prevent the callback from firing")
+		}
+	}
+}
+
+func TestSandbox_NoSetInterval(t *testing.T) {
+	sandbox := NewSandbox(5 * time.Second)
+	caller := &mockToolCaller{
+		callFn: func(ctx context.Context, name string, arguments map[string]any) (*ToolCallResult, error) {
+			return &ToolCallResult{}, nil
+		},
+	}
+
+	result, err := sandbox.Execute(context.Background(), `typeof setInterval`, caller, nil)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if result.Value != `"undefined"` {
+		t.Errorf("Expected setInterval to be undefined, got: %s", result.Value)
+	}
+}
+
 func TestSandbox_CryptoRandomUUID(t *testing.T) {
 	sandbox := NewSandbox(5 * time.Second)
 	caller := &mockToolCaller{
