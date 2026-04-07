@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
+	"github.com/dop251/goja_nodejs/eventloop"
 )
 
 // MaxCodeSize is the maximum allowed code input size (64KB).
@@ -49,17 +50,12 @@ func (s *Sandbox) Execute(ctx context.Context, code string, caller ToolCaller, a
 		return nil, fmt.Errorf("transpilation failed: %w", err)
 	}
 
-	// Create fresh runtime (prevents state leakage between executions)
-	vm := goja.New()
-
-	// Set up timeout via interrupt
+	// Set up execution timeout
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	go func() {
-		<-ctx.Done()
-		vm.Interrupt("execution timeout exceeded")
-	}()
+	// Create event loop — provides setTimeout/clearTimeout on the runtime
+	loop := eventloop.NewEventLoop(eventloop.EnableConsole(false))
 
 	// Build allowed tool set for ACL enforcement
 	toolSet := make(map[string]bool, len(allowedTools))
@@ -67,107 +63,139 @@ func (s *Sandbox) Execute(ctx context.Context, code string, caller ToolCaller, a
 		toolSet[t.Name] = true
 	}
 
-	// Capture console output
 	var consoleOutput []string
+	var val goja.Value
+	var runErr error
 
-	// Inject console object
-	console := vm.NewObject()
-	logFn := func(call goja.FunctionCall) goja.Value {
-		parts := make([]string, len(call.Arguments))
-		for i, arg := range call.Arguments {
-			parts[i] = arg.String()
-		}
-		consoleOutput = append(consoleOutput, strings.Join(parts, " "))
-		return goja.Undefined()
-	}
-	_ = console.Set("log", logFn)
-	_ = console.Set("warn", logFn)
-	_ = console.Set("error", logFn)
-	_ = vm.Set("console", console)
+	loop.Run(func(vm *goja.Runtime) {
+		// Interrupt JS execution and terminate the event loop on timeout.
+		// loop.Terminate() cancels pending timers, preventing goroutine leaks
+		// when long-duration sleeps are interrupted mid-execution.
+		go func() {
+			<-ctx.Done()
+			vm.Interrupt("execution timeout exceeded")
+			loop.Terminate()
+		}()
 
-	// Inject mcp.callTool binding
-	mcpObj := vm.NewObject()
-	_ = mcpObj.Set("callTool", func(call goja.FunctionCall) goja.Value {
-		if len(call.Arguments) < 2 {
-			panic(vm.NewGoError(fmt.Errorf("mcp.callTool requires at least 2 arguments: serverName, toolName, [args]")))
-		}
+		// Disable timer APIs not supported by this sandbox
+		_ = vm.Set("setInterval", goja.Undefined())
+		_ = vm.Set("clearInterval", goja.Undefined())
+		_ = vm.Set("setImmediate", goja.Undefined())
+		_ = vm.Set("clearImmediate", goja.Undefined())
 
-		serverName := call.Arguments[0].String()
-		toolName := call.Arguments[1].String()
-
-		var args map[string]any
-		if len(call.Arguments) >= 3 {
-			exported := call.Arguments[2].Export()
-			if m, ok := exported.(map[string]any); ok {
-				args = m
+		// Inject console object (overrides goja_nodejs default with output capture)
+		console := vm.NewObject()
+		logFn := func(call goja.FunctionCall) goja.Value {
+			parts := make([]string, len(call.Arguments))
+			for i, arg := range call.Arguments {
+				parts[i] = arg.String()
 			}
+			consoleOutput = append(consoleOutput, strings.Join(parts, " "))
+			return goja.Undefined()
 		}
+		_ = console.Set("log", logFn)
+		_ = console.Set("warn", logFn)
+		_ = console.Set("error", logFn)
+		_ = vm.Set("console", console)
 
-		// Build prefixed tool name (server__tool)
-		prefixedName := serverName + ToolNameDelimiter + toolName
+		// Inject mcp.callTool binding
+		mcpObj := vm.NewObject()
+		_ = mcpObj.Set("callTool", func(call goja.FunctionCall) goja.Value {
+			if len(call.Arguments) < 2 {
+				panic(vm.NewGoError(fmt.Errorf("mcp.callTool requires at least 2 arguments: serverName, toolName, [args]")))
+			}
 
-		// Enforce ACL
-		if !toolSet[prefixedName] {
-			panic(vm.NewGoError(fmt.Errorf("access denied: tool '%s' from server '%s' is not available", toolName, serverName)))
-		}
+			serverName := call.Arguments[0].String()
+			toolName := call.Arguments[1].String()
 
-		// Call the tool through the gateway
-		result, err := caller.CallTool(ctx, prefixedName, args)
-		if err != nil {
-			panic(vm.NewGoError(fmt.Errorf("tool call failed: %w", err)))
-		}
+			var args map[string]any
+			if len(call.Arguments) >= 3 {
+				exported := call.Arguments[2].Export()
+				if m, ok := exported.(map[string]any); ok {
+					args = m
+				}
+			}
 
-		if result.IsError {
-			text := ""
+			// Build prefixed tool name (server__tool)
+			prefixedName := serverName + ToolNameDelimiter + toolName
+
+			// Enforce ACL
+			if !toolSet[prefixedName] {
+				panic(vm.NewGoError(fmt.Errorf("access denied: tool '%s' from server '%s' is not available", toolName, serverName)))
+			}
+
+			// Call the tool through the gateway
+			result, err := caller.CallTool(ctx, prefixedName, args)
+			if err != nil {
+				panic(vm.NewGoError(fmt.Errorf("tool call failed: %w", err)))
+			}
+
+			if result.IsError {
+				text := ""
+				for _, c := range result.Content {
+					if c.Text != "" {
+						text = c.Text
+						break
+					}
+				}
+				panic(vm.NewGoError(fmt.Errorf("tool error: %s", text)))
+			}
+
+			// Parse the tool result content into a native JS value
+			// so agents can immediately access fields (e.g., result.field)
 			for _, c := range result.Content {
 				if c.Text != "" {
-					text = c.Text
-					break
+					var parsed any
+					if json.Unmarshal([]byte(c.Text), &parsed) == nil {
+						return vm.ToValue(parsed)
+					}
+					return vm.ToValue(c.Text)
 				}
 			}
-			panic(vm.NewGoError(fmt.Errorf("tool error: %s", text)))
-		}
 
-		// Parse the tool result content into a native JS value
-		// so agents can immediately access fields (e.g., result.field)
-		for _, c := range result.Content {
-			if c.Text != "" {
-				var parsed any
-				if json.Unmarshal([]byte(c.Text), &parsed) == nil {
-					return vm.ToValue(parsed)
-				}
-				return vm.ToValue(c.Text)
+			return goja.Undefined()
+		})
+		_ = vm.Set("mcp", mcpObj)
+
+		// Inject crypto object with randomUUID()
+		cryptoObj := vm.NewObject()
+		_ = cryptoObj.Set("randomUUID", func(call goja.FunctionCall) goja.Value {
+			var b [16]byte
+			if _, err := crand.Read(b[:]); err != nil {
+				panic(vm.NewGoError(fmt.Errorf("crypto.randomUUID: %w", err)))
 			}
-		}
+			b[6] = (b[6] & 0x0f) | 0x40 // version 4
+			b[8] = (b[8] & 0x3f) | 0x80 // variant bits
+			uuid := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+			return vm.ToValue(uuid)
+		})
+		_ = vm.Set("crypto", cryptoObj)
 
-		return goja.Undefined()
+		// Inject sleep(ms) — returns a Promise that resolves after ms milliseconds.
+		// Primary use case: await sleep(1000) for polling delays and retry backoff.
+		_ = vm.Set("sleep", func(call goja.FunctionCall) goja.Value {
+			if len(call.Arguments) == 0 {
+				panic(vm.NewGoError(fmt.Errorf("sleep requires a delay argument")))
+			}
+			delay := time.Duration(call.Arguments[0].ToInteger()) * time.Millisecond
+			promise, resolve, _ := vm.NewPromise()
+			loop.SetTimeout(func(*goja.Runtime) {
+				_ = resolve(goja.Undefined())
+			}, delay)
+			return vm.ToValue(promise)
+		})
+
+		val, runErr = vm.RunString(transpiled)
 	})
-	_ = vm.Set("mcp", mcpObj)
 
-	// Inject crypto object with randomUUID()
-	cryptoObj := vm.NewObject()
-	_ = cryptoObj.Set("randomUUID", func(call goja.FunctionCall) goja.Value {
-		var b [16]byte
-		if _, err := crand.Read(b[:]); err != nil {
-			panic(vm.NewGoError(fmt.Errorf("crypto.randomUUID: %w", err)))
-		}
-		b[6] = (b[6] & 0x0f) | 0x40 // version 4
-		b[8] = (b[8] & 0x3f) | 0x80 // variant bits
-		uuid := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-		return vm.ToValue(uuid)
-	})
-	_ = vm.Set("crypto", cryptoObj)
-
-	// Execute the transpiled code
-	val, err := vm.RunString(transpiled)
-	if err != nil {
+	if runErr != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("execution exceeded %s timeout", s.timeout)
 		}
-		if jsErr, ok := err.(*goja.InterruptedError); ok {
+		if jsErr, ok := runErr.(*goja.InterruptedError); ok {
 			return nil, fmt.Errorf("execution interrupted: %s", jsErr.Value())
 		}
-		return nil, fmt.Errorf("runtime error: %w", err)
+		return nil, fmt.Errorf("runtime error: %w", runErr)
 	}
 
 	// Format the return value
