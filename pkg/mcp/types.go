@@ -170,6 +170,7 @@ type InitializeResult struct {
 	ProtocolVersion string       `json:"protocolVersion"`
 	ServerInfo      ServerInfo   `json:"serverInfo"`
 	Capabilities    Capabilities `json:"capabilities"`
+	Instructions    string       `json:"instructions,omitempty"`
 }
 
 // Tool represents an MCP tool definition.

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -2638,6 +2639,134 @@ func TestGateway_HandleToolsCall_FormatConversion_CSVNonTabular(t *testing.T) {
 	// CSV conversion should fail for non-tabular data, leaving content unchanged
 	if result.Content[0].Text != jsonContent {
 		t.Errorf("expected unchanged content on CSV failure, got: %s", result.Content[0].Text)
+	}
+}
+
+func TestGateway_HandleInitialize_Instructions(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+
+	c1 := setupMockAgentClient(ctrl, "server-a", []Tool{
+		{Name: "tool1", Description: "Tool 1"},
+		{Name: "tool2", Description: "Tool 2"},
+	})
+	c2 := setupMockAgentClient(ctrl, "server-b", []Tool{
+		{Name: "tool3", Description: "Tool 3"},
+	})
+	g.SetServerMeta(MCPServerConfig{Name: "server-a"})
+	g.SetServerMeta(MCPServerConfig{Name: "server-b"})
+	g.Router().AddClient(c1)
+	g.Router().AddClient(c2)
+	g.Router().RefreshTools()
+
+	result, _, err := g.HandleInitialize(InitializeParams{
+		ProtocolVersion: "2024-11-05",
+		ClientInfo:      ClientInfo{Name: "test-client", Version: "1.0"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Instructions == "" {
+		t.Fatal("expected Instructions to be non-empty")
+	}
+	if !strings.Contains(result.Instructions, "server-a") {
+		t.Errorf("Instructions missing server-a: %q", result.Instructions)
+	}
+	if !strings.Contains(result.Instructions, "server-b") {
+		t.Errorf("Instructions missing server-b: %q", result.Instructions)
+	}
+	if !strings.Contains(result.Instructions, "__") {
+		t.Errorf("Instructions missing prefixed name example: %q", result.Instructions)
+	}
+	if strings.Contains(result.Instructions, "code mode") {
+		t.Errorf("Instructions should not mention code mode when off: %q", result.Instructions)
+	}
+}
+
+func TestGateway_HandleInitialize_InstructionsCodeMode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+	g.SetCodeMode(30 * time.Second)
+
+	c1 := setupMockAgentClient(ctrl, "server-a", []Tool{
+		{Name: "tool1", Description: "Tool 1"},
+	})
+	g.SetServerMeta(MCPServerConfig{Name: "server-a"})
+	g.Router().AddClient(c1)
+	g.Router().RefreshTools()
+
+	result, _, err := g.HandleInitialize(InitializeParams{
+		ProtocolVersion: "2024-11-05",
+		ClientInfo:      ClientInfo{Name: "test-client", Version: "1.0"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result.Instructions, "search") {
+		t.Errorf("Code mode Instructions missing 'search': %q", result.Instructions)
+	}
+	if !strings.Contains(result.Instructions, "execute") {
+		t.Errorf("Code mode Instructions missing 'execute': %q", result.Instructions)
+	}
+}
+
+func TestGateway_HandleInitialize_InstructionsNoServers(t *testing.T) {
+	g := NewGateway()
+
+	result, _, err := g.HandleInitialize(InitializeParams{
+		ProtocolVersion: "2024-11-05",
+		ClientInfo:      ClientInfo{Name: "test-client", Version: "1.0"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Instructions != "" {
+		t.Errorf("expected empty Instructions with no servers, got: %q", result.Instructions)
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("failed to marshal result: %v", err)
+	}
+	if strings.Contains(string(data), "instructions") {
+		t.Errorf("JSON should omit instructions field when empty, got: %s", data)
+	}
+}
+
+func TestGateway_HandleInitialize_InstructionsFiltersNonMCP(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	g := NewGateway()
+
+	// MCP server: registered in both serverMeta and router
+	mcpClient := setupMockAgentClient(ctrl, "mcp-server", []Tool{
+		{Name: "tool1", Description: "Tool 1"},
+	})
+	g.SetServerMeta(MCPServerConfig{Name: "mcp-server"})
+	g.Router().AddClient(mcpClient)
+
+	// A2A adapter: registered in router only, no serverMeta entry
+	a2aClient := setupMockAgentClient(ctrl, "a2a-adapter", []Tool{
+		{Name: "skill1", Description: "Skill 1"},
+	})
+	g.Router().AddClient(a2aClient)
+	g.Router().RefreshTools()
+
+	result, _, err := g.HandleInitialize(InitializeParams{
+		ProtocolVersion: "2024-11-05",
+		ClientInfo:      ClientInfo{Name: "test-client", Version: "1.0"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result.Instructions, "mcp-server") {
+		t.Errorf("Instructions missing MCP server name: %q", result.Instructions)
+	}
+	if strings.Contains(result.Instructions, "a2a-adapter") {
+		t.Errorf("Instructions must not include A2A adapter: %q", result.Instructions)
 	}
 }
 
