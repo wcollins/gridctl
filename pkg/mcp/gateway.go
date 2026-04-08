@@ -684,6 +684,54 @@ func (g *Gateway) waitForHTTPServer(ctx context.Context, client *Client) error {
 	}
 }
 
+// buildInstructions returns the instructions string for the MCP initialize
+// response. The string is built from current server metadata and reflects
+// whether code mode is active. Returns "" if no MCP servers are registered.
+func (g *Gateway) buildInstructions() string {
+	// Get live client data from router first (acquires router lock).
+	clients := g.router.Clients()
+	toolCounts := make(map[string]int, len(clients))
+	for _, c := range clients {
+		toolCounts[c.Name()] = len(c.Tools())
+	}
+
+	// Read serverMeta and codeModeStr under gateway lock.
+	g.mu.RLock()
+	isCodeMode := g.codeModeStr == "on"
+	mcpServers := make([]string, 0, len(g.serverMeta))
+	for name := range g.serverMeta {
+		mcpServers = append(mcpServers, name)
+	}
+	g.mu.RUnlock()
+
+	if len(mcpServers) == 0 {
+		return ""
+	}
+
+	sort.Strings(mcpServers)
+
+	if isCodeMode {
+		totalTools := 0
+		for _, name := range mcpServers {
+			totalTools += toolCounts[name]
+		}
+		names := strings.Join(mcpServers, ", ")
+		return fmt.Sprintf(
+			"gridctl is an MCP gateway running in code mode, aggregating tools from %d downstream MCP servers: %s (%d tools total, hidden behind meta-tools to save context). Two meta-tools are exposed: `search` to discover tools by keyword and `execute` to run JavaScript that calls them via `mcp.callTool(serverName, toolName, args)`. ALWAYS call `search` first (with an empty query to list everything, or a keyword to filter) before attempting any other operation.",
+			len(mcpServers), names, totalTools,
+		)
+	}
+
+	parts := make([]string, len(mcpServers))
+	for i, name := range mcpServers {
+		parts[i] = fmt.Sprintf("`%s` (%d tools)", name, toolCounts[name])
+	}
+	return fmt.Sprintf(
+		"gridctl is an MCP gateway aggregating tools from %d downstream MCP servers: %s. Use these tools as the primary way to interact with the underlying systems in this session. Tool names are namespaced as `<server>__<tool>` — always invoke them by their full prefixed name (e.g. `%s__example_tool`). Call `tools/list` to see the full inventory.",
+		len(mcpServers), strings.Join(parts, ", "), mcpServers[0],
+	)
+}
+
 // HandleInitialize handles the initialize request. It creates a new session and
 // returns both the result and the session so callers can use the session ID.
 func (g *Gateway) HandleInitialize(params InitializeParams) (*InitializeResult, *Session, error) {
@@ -709,6 +757,7 @@ func (g *Gateway) HandleInitialize(params InitializeParams) (*InitializeResult, 
 		ProtocolVersion: MCPProtocolVersion,
 		ServerInfo:      g.ServerInfo(),
 		Capabilities:    caps,
+		Instructions:    g.buildInstructions(),
 	}, session, nil
 }
 
