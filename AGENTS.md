@@ -75,11 +75,16 @@ gridctl/
 │   ├── main.go           # Entry point
 │   ├── root.go           # Cobra root command + serve command
 │   ├── apply.go          # Start stack + gateway
+│   ├── validate.go       # Validate stack YAML (exit 0/1/2, --format json)
+│   ├── plan.go           # Diff spec against running state (--yes, --format json)
+│   ├── export.go         # Reverse-engineer stack.yaml from running state (-o, --format)
 │   ├── destroy.go        # Stop containers
 │   ├── status.go         # Show container status
+│   ├── info.go           # Show detected container runtime
 │   ├── link.go           # Connect LLM clients to gateway
 │   ├── unlink.go         # Remove gridctl from LLM clients
 │   ├── reload.go         # Hot reload stack configuration
+│   ├── skill.go          # Remote skill management (add, update, remove, pin, info, validate, try)
 │   ├── vault.go          # Vault secret management commands
 │   ├── pins.go           # Schema pin management commands
 │   ├── traces.go         # Distributed traces CLI command (table, waterfall, follow)
@@ -299,6 +304,7 @@ make clean-mock-servers # Stop and remove mock MCP servers
 # Spec-driven skill development
 ./gridctl test my-skill            # Run acceptance criteria (exit 0/1/2)
 ./gridctl activate my-skill        # Promote from draft to active
+./gridctl skill validate my-skill  # Validate skill definition and frontmatter
 ```
 
 ### Command Reference
@@ -329,6 +335,23 @@ Compares the stack spec against running state and shows a structured diff.
 | `--yes` | `-y` | Auto-approve and apply changes |
 | `--auto-approve` | | Auto-approve and apply changes (CI/CD equivalent of `-y`) |
 | `--format` | | Output format: `json` for machine-readable output |
+
+#### `gridctl validate <stack.yaml>`
+
+Validates the stack spec including config schema, transport rules, and workflow definitions. Exit codes: `0` valid, `1` validation error, `2` infrastructure error.
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--format` | | Output format: `json` for machine-readable output |
+
+#### `gridctl export`
+
+Reverse-engineers a `stack.yaml` from the currently running deployment.
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--output` | `-o` | Output directory (default: stdout) |
+| `--format` | | Output format: `yaml` (default) or `json` |
 
 #### `gridctl destroy <stack.yaml>`
 
