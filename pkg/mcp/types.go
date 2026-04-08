@@ -104,7 +104,7 @@ type PinResetter interface {
 const DefaultPingTimeout = 5 * time.Second
 
 // MCPProtocolVersion is the MCP protocol version supported by this implementation.
-const MCPProtocolVersion = "2024-11-05"
+const MCPProtocolVersion = "2025-11-25"
 
 // Default timeouts for MCP transport clients.
 const (

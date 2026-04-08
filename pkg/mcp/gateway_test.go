@@ -59,8 +59,8 @@ func TestGateway_HandleInitialize(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.ProtocolVersion != "2024-11-05" {
-		t.Errorf("expected protocol version '2024-11-05', got '%s'", result.ProtocolVersion)
+	if result.ProtocolVersion != MCPProtocolVersion {
+		t.Errorf("expected protocol version '%s', got '%s'", MCPProtocolVersion, result.ProtocolVersion)
 	}
 	if result.ServerInfo.Name != "gridctl-gateway" {
 		t.Errorf("expected server name 'gridctl-gateway', got '%s'", result.ServerInfo.Name)
