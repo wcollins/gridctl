@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -477,7 +478,9 @@ func TestApplyAuth_Bearer(t *testing.T) {
 	})
 
 	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
-	c.applyAuth(req)
+	if err := c.applyAuth(req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if req.Header.Get("Authorization") != "Bearer my-token" {
 		t.Errorf("expected 'Bearer my-token', got %q", req.Header.Get("Authorization"))
@@ -494,7 +497,9 @@ func TestApplyAuth_Header(t *testing.T) {
 	})
 
 	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
-	c.applyAuth(req)
+	if err := c.applyAuth(req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if req.Header.Get("X-API-Key") != "secret123" {
 		t.Errorf("expected 'secret123', got %q", req.Header.Get("X-API-Key"))
@@ -508,10 +513,102 @@ func TestApplyAuth_NoAuth(t *testing.T) {
 	})
 
 	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
-	c.applyAuth(req)
+	if err := c.applyAuth(req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if req.Header.Get("Authorization") != "" {
 		t.Error("expected no Authorization header")
+	}
+}
+
+func TestApplyAuth_Query(t *testing.T) {
+	c, _ := NewOpenAPIClient("test", &OpenAPIClientConfig{
+		Spec:           "http://example.com/spec.json",
+		BaseURL:        "http://example.com",
+		AuthType:       "query",
+		AuthQueryParam: "api_key",
+		AuthQueryValue: "myapikey",
+	})
+
+	req, _ := http.NewRequest("GET", "http://example.com/test?existing=1", nil)
+	if err := c.applyAuth(req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	q := req.URL.Query()
+	if q.Get("api_key") != "myapikey" {
+		t.Errorf("expected api_key=myapikey, got %q", q.Get("api_key"))
+	}
+	// Existing query params must be preserved
+	if q.Get("existing") != "1" {
+		t.Errorf("existing query param lost; got %q", q.Get("existing"))
+	}
+}
+
+func TestApplyAuth_Basic(t *testing.T) {
+	c, _ := NewOpenAPIClient("test", &OpenAPIClientConfig{
+		Spec:          "http://example.com/spec.json",
+		BaseURL:       "http://example.com",
+		AuthType:      "basic",
+		BasicUsername: "alice",
+		BasicPassword: "s3cr3t",
+	})
+
+	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
+	if err := c.applyAuth(req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	user, pass, ok := req.BasicAuth()
+	if !ok {
+		t.Fatal("expected Basic auth header")
+	}
+	if user != "alice" || pass != "s3cr3t" {
+		t.Errorf("expected alice/s3cr3t, got %q/%q", user, pass)
+	}
+}
+
+func TestApplyAuth_OAuth2(t *testing.T) {
+	// Mock token endpoint
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if r.Form.Get("grant_type") != "client_credentials" {
+			http.Error(w, "invalid grant_type", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"test-oauth-token","token_type":"Bearer","expires_in":3600}`))
+	}))
+	defer tokenServer.Close()
+
+	c, err := NewOpenAPIClient("test", &OpenAPIClientConfig{
+		Spec:               "http://example.com/spec.json",
+		BaseURL:            "http://example.com",
+		AuthType:           "oauth2",
+		OAuth2ClientID:     "client-id",
+		OAuth2ClientSecret: "client-secret",
+		OAuth2TokenURL:     tokenServer.URL + "/token",
+	})
+	if err != nil {
+		t.Fatalf("NewOpenAPIClient failed: %v", err)
+	}
+
+	req, _ := http.NewRequest("GET", "http://example.com/test", nil)
+	if err := c.applyAuth(req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if req.Header.Get("Authorization") != "Bearer test-oauth-token" {
+		t.Errorf("expected 'Bearer test-oauth-token', got %q", req.Header.Get("Authorization"))
 	}
 }
 
@@ -555,5 +652,88 @@ func TestRefreshTools(t *testing.T) {
 	tools := client.Tools()
 	if len(tools) != 1 {
 		t.Errorf("expected 1 tool after refresh, got %d", len(tools))
+	}
+}
+
+func TestPing_NoBaseURL(t *testing.T) {
+	c, _ := NewOpenAPIClient("test", &OpenAPIClientConfig{
+		Spec: "http://example.com/spec.json",
+	})
+	err := c.Ping(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "no base URL") {
+		t.Errorf("expected 'no base URL' error, got %v", err)
+	}
+}
+
+func TestPing_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, _ := NewOpenAPIClient("test", &OpenAPIClientConfig{
+		Spec:    srv.URL + "/spec.json",
+		BaseURL: srv.URL,
+	})
+	if err := c.Ping(context.Background()); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestPing_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c, _ := NewOpenAPIClient("test", &OpenAPIClientConfig{
+		Spec:    srv.URL + "/spec.json",
+		BaseURL: srv.URL,
+	})
+	if err := c.Ping(context.Background()); err == nil {
+		t.Error("expected error for 500 response")
+	}
+}
+
+func TestPing_WithBearerAuth(t *testing.T) {
+	const token = "ping-test-token"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c, _ := NewOpenAPIClient("test", &OpenAPIClientConfig{
+		Spec:      srv.URL + "/spec.json",
+		BaseURL:   srv.URL,
+		AuthType:  "bearer",
+		AuthToken: token,
+	})
+	if err := c.Ping(context.Background()); err != nil {
+		t.Errorf("unexpected error with valid bearer token: %v", err)
+	}
+}
+
+func TestNewOpenAPIClient_TLSInvalidCert(t *testing.T) {
+	dir := t.TempDir()
+	certFile := dir + "/cert.pem"
+	keyFile := dir + "/key.pem"
+	if err := os.WriteFile(certFile, []byte("not a cert"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyFile, []byte("not a key"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := NewOpenAPIClient("test", &OpenAPIClientConfig{
+		Spec:        "http://example.com/spec.json",
+		TLSCertFile: certFile,
+		TLSKeyFile:  keyFile,
+	})
+	if err == nil || !strings.Contains(err.Error(), "loading TLS client certificate") {
+		t.Errorf("expected TLS cert error, got %v", err)
 	}
 }

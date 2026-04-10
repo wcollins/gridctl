@@ -238,21 +238,58 @@ func Validate(s *Stack) error {
 			// Auth validation
 			if server.OpenAPI.Auth != nil {
 				authPrefix := openapiPrefix + ".auth"
-				if server.OpenAPI.Auth.Type != "" && server.OpenAPI.Auth.Type != "bearer" && server.OpenAPI.Auth.Type != "header" {
-					errs = append(errs, ValidationError{authPrefix + ".type", "must be 'bearer' or 'header'"})
+				validAuthTypes := map[string]bool{"bearer": true, "header": true, "query": true, "oauth2": true, "basic": true}
+				if server.OpenAPI.Auth.Type != "" && !validAuthTypes[server.OpenAPI.Auth.Type] {
+					errs = append(errs, ValidationError{authPrefix + ".type", "must be 'bearer', 'header', 'query', 'oauth2', or 'basic'"})
 				}
-				if server.OpenAPI.Auth.Type == "bearer" && server.OpenAPI.Auth.TokenEnv == "" {
-					errs = append(errs, ValidationError{authPrefix + ".tokenEnv", "required when type is 'bearer'"})
-				}
-				if server.OpenAPI.Auth.Type == "header" {
+				switch server.OpenAPI.Auth.Type {
+				case "bearer":
+					if server.OpenAPI.Auth.TokenEnv == "" {
+						errs = append(errs, ValidationError{authPrefix + ".tokenEnv", "required when type is 'bearer'"})
+					}
+				case "header":
 					if server.OpenAPI.Auth.Header == "" {
 						errs = append(errs, ValidationError{authPrefix + ".header", "required when type is 'header'"})
 					}
 					if server.OpenAPI.Auth.ValueEnv == "" {
 						errs = append(errs, ValidationError{authPrefix + ".valueEnv", "required when type is 'header'"})
 					}
+				case "query":
+					if server.OpenAPI.Auth.ParamName == "" {
+						errs = append(errs, ValidationError{authPrefix + ".paramName", "required when type is 'query'"})
+					}
+					if server.OpenAPI.Auth.ValueEnv == "" {
+						errs = append(errs, ValidationError{authPrefix + ".valueEnv", "required when type is 'query'"})
+					}
+				case "oauth2":
+					if server.OpenAPI.Auth.ClientIdEnv == "" {
+						errs = append(errs, ValidationError{authPrefix + ".clientIdEnv", "required when type is 'oauth2'"})
+					}
+					if server.OpenAPI.Auth.ClientSecretEnv == "" {
+						errs = append(errs, ValidationError{authPrefix + ".clientSecretEnv", "required when type is 'oauth2'"})
+					}
+					if server.OpenAPI.Auth.TokenUrl == "" {
+						errs = append(errs, ValidationError{authPrefix + ".tokenUrl", "required when type is 'oauth2'"})
+					}
+				case "basic":
+					if server.OpenAPI.Auth.UsernameEnv == "" {
+						errs = append(errs, ValidationError{authPrefix + ".usernameEnv", "required when type is 'basic'"})
+					}
+					if server.OpenAPI.Auth.PasswordEnv == "" {
+						errs = append(errs, ValidationError{authPrefix + ".passwordEnv", "required when type is 'basic'"})
+					}
 				}
 			}
+			// TLS validation
+			if server.OpenAPI.TLS != nil {
+				tlsPrefix := openapiPrefix + ".tls"
+				if server.OpenAPI.TLS.CertFile != "" && server.OpenAPI.TLS.KeyFile == "" {
+					errs = append(errs, ValidationError{tlsPrefix + ".keyFile", "required when certFile is set"})
+				}
+				if server.OpenAPI.TLS.KeyFile != "" && server.OpenAPI.TLS.CertFile == "" {
+					errs = append(errs, ValidationError{tlsPrefix + ".certFile", "required when keyFile is set"})
+				}
+				}
 			// Operations filter validation
 			if server.OpenAPI.Operations != nil {
 				if len(server.OpenAPI.Operations.Include) > 0 && len(server.OpenAPI.Operations.Exclude) > 0 {
