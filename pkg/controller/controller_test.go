@@ -2,6 +2,7 @@ package controller
 
 import (
 	"io/fs"
+	"net"
 	"os"
 	"os/exec"
 	"testing"
@@ -44,6 +45,40 @@ func TestNew(t *testing.T) {
 	ctrl := New(cfg)
 	if ctrl == nil {
 		t.Fatal("New returned nil")
+	}
+}
+
+func TestStackController_Serve_StacklessConfig(t *testing.T) {
+	setTempHome(t)
+
+	// Verify that a controller configured for stackless mode has no StackPath,
+	// which is the precondition for Serve() to skip stack loading.
+	ctrl := New(Config{
+		Port:  8190,
+		Quiet: true,
+	})
+	ctrl.SetWebFS(func() (fs.FS, error) { return nil, nil })
+
+	if ctrl.config.StackPath != "" {
+		t.Errorf("expected empty StackPath for stackless config, got %q", ctrl.config.StackPath)
+	}
+	if ctrl.webFS == nil {
+		t.Error("expected webFS to be set")
+	}
+}
+
+func TestStackController_Serve_LoadsVaultBestEffort(t *testing.T) {
+	setTempHome(t)
+
+	// Verify vaultStore is nil before Serve() and that vault dir is resolvable.
+	ctrl := New(Config{Port: 8191, Quiet: true})
+	if ctrl.vaultStore != nil {
+		t.Error("expected nil vaultStore before Serve()")
+	}
+
+	vaultDir := state.VaultDir()
+	if vaultDir == "" {
+		t.Error("expected non-empty vault dir from state.VaultDir()")
 	}
 }
 
@@ -614,6 +649,83 @@ func TestCheckState_ReplaceKeepsExplicitPort(t *testing.T) {
 	// Explicit port should be preserved, not overwritten
 	if sc.config.Port != 7777 {
 		t.Errorf("expected port 7777 (explicit), got %d", sc.config.Port)
+	}
+}
+
+// occupiedPort starts a listener on all interfaces on a random port and returns
+// the port number. The HTTP server uses ":PORT" (all interfaces), so this
+// listener blocks it. The caller is responsible for closing the listener.
+func occupiedPort(t *testing.T) (int, func()) {
+	t.Helper()
+	ln, err := net.Listen("tcp", ":0") //nolint:gosec // intentionally binding all interfaces to block the HTTP server in tests
+	if err != nil {
+		t.Fatalf("could not listen: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	return port, func() { ln.Close() }
+}
+
+func TestStackController_Serve_Foreground_PortInUse(t *testing.T) {
+	setTempHome(t)
+
+	port, closeListener := occupiedPort(t)
+	defer closeListener()
+
+	ctrl := New(Config{Port: port, Foreground: true, Quiet: true})
+	ctrl.SetWebFS(func() (fs.FS, error) { return nil, nil })
+
+	// Port is occupied so BuildAndRun fails after ~100ms grace period.
+	err := ctrl.Serve(t.Context())
+	if err == nil {
+		t.Fatal("expected error from occupied port")
+	}
+}
+
+func TestStackController_Serve_DaemonChild_PortInUse(t *testing.T) {
+	setTempHome(t)
+
+	port, closeListener := occupiedPort(t)
+	defer closeListener()
+
+	ctrl := New(Config{Port: port, DaemonChild: true, Quiet: true})
+	ctrl.SetWebFS(func() (fs.FS, error) { return nil, nil })
+
+	// DaemonChild path: saves state, then buildAndRunStackless fails on occupied port.
+	err := ctrl.Serve(t.Context())
+	if err == nil {
+		t.Fatal("expected error from occupied port")
+	}
+}
+
+func TestStackController_BuildAndRunStackless_PortInUse(t *testing.T) {
+	setTempHome(t)
+
+	port, closeListener := occupiedPort(t)
+	defer closeListener()
+
+	ctrl := New(Config{Port: port, Quiet: true})
+	ctrl.SetWebFS(func() (fs.FS, error) { return nil, nil })
+
+	err := ctrl.buildAndRunStackless(t.Context(), false)
+	if err == nil {
+		t.Fatal("expected error from occupied port")
+	}
+}
+
+func TestStackController_RunStacklessDaemonChild_PortInUse(t *testing.T) {
+	setTempHome(t)
+
+	port, closeListener := occupiedPort(t)
+	defer closeListener()
+
+	ctrl := New(Config{Port: port, Quiet: true})
+	ctrl.SetWebFS(func() (fs.FS, error) { return nil, nil })
+
+	// runStacklessDaemonChild saves state then calls buildAndRunStackless.
+	// The port is in use so buildAndRunStackless returns quickly with an error.
+	err := ctrl.runStacklessDaemonChild(t.Context())
+	if err == nil {
+		t.Fatal("expected error from occupied port")
 	}
 }
 
