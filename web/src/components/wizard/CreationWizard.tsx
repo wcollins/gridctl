@@ -519,8 +519,8 @@ function TypePicker({
   onSelect: (type: ResourceType) => void;
   counts: Record<ResourceType, number>;
 }) {
-  const connectionStatus = useStackStore((s) => s.connectionStatus);
-  const hasActiveStack = connectionStatus === 'connected';
+  const stackName = useStackStore((s) => s.stackName);
+  const hasActiveStack = stackName !== '';
 
   return (
     <div className="py-4">

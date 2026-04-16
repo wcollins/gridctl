@@ -313,6 +313,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		Registry   *registry.RegistryStatus `json:"registry,omitempty"`
 		CodeMode   string                   `json:"code_mode,omitempty"`
 		TokenUsage *metrics.TokenUsage      `json:"token_usage,omitempty"`
+		StackName  string                   `json:"stack_name,omitempty"`
 	}{
 		Gateway: ServerInfo{
 			Name:      s.gateway.ServerInfo().Name,
@@ -321,7 +322,13 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		},
 		MCPServers: s.getMCPServerStatuses(),
 		Resources:  s.getResourceStatuses(),
-		Sessions:   s.gateway.SessionCount(),
+		Sessions: s.gateway.SessionCount(),
+	}
+	// Only expose stack_name when a user-defined stack is loaded.
+	// The embedded gateway uses "gridctl" as its default name even in stackless
+	// mode, so stackFile is the authoritative indicator.
+	if s.stackFile != "" {
+		status.StackName = s.stackName
 	}
 	if cm := s.gateway.CodeModeStatus(); cm != "off" {
 		status.CodeMode = cm
