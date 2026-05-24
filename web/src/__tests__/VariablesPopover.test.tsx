@@ -169,10 +169,10 @@ describe('VariablesPopover', () => {
       expect(screen.getByPlaceholderText('item1, item2, item3')).toBeInTheDocument();
     });
 
-    it('hints JSON object syntax when json type is selected', async () => {
+    it('shows the JSON editor when json type is selected', async () => {
       await openCreateForm();
       fireEvent.click(screen.getByRole('button', { name: 'json' }));
-      expect(screen.getByPlaceholderText('{"key": "value"}')).toBeInTheDocument();
+      expect(await screen.findByLabelText('JSON value')).toBeInTheDocument();
     });
 
     it('hints a number example when number type is selected', async () => {
@@ -181,10 +181,10 @@ describe('VariablesPopover', () => {
       expect(screen.getByPlaceholderText('42')).toBeInTheDocument();
     });
 
-    it('hints true/false when bool type is selected', async () => {
+    it('renders a toggle switch when bool type is selected', async () => {
       await openCreateForm();
       fireEvent.click(screen.getByRole('button', { name: 'bool' }));
-      expect(screen.getByPlaceholderText('true or false')).toBeInTheDocument();
+      expect(screen.getByRole('switch')).toBeInTheDocument();
     });
   });
 
