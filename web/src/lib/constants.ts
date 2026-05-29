@@ -10,6 +10,11 @@ export const LAYOUT = {
   CLIENT_WIDTH: 160,   // Linked client node width
   CLIENT_HEIGHT: 120,  // Linked client node height
   CLIENT_HEIGHT_COMPACT: 48,  // Client compact mode height
+  TOOL_WIDTH: 200,     // Tool fan-out pill width
+  TOOL_HEIGHT: 34,     // Tool fan-out pill height
+  TOOL_GAP: 14,        // Vertical gap between fanned-out tool nodes
+  TOOL_OFFSET_X: 72,   // Horizontal gap from server right edge to tool column
+  TOOL_BAND_GAP: 48,   // Vertical gap between adjacent expanded servers' tool bands
   // Dagre layout spacing
   NODE_SPACING: 60,    // Vertical spacing between nodes in same rank
   RANK_SPACING: 120,   // Horizontal spacing between tiers (gateway -> servers -> etc)
@@ -87,6 +92,8 @@ export const NODE_TYPES = {
   CLIENT: 'client',
   SKILL: 'skill',
   SKILL_GROUP: 'skillGroup',
+  TOOL: 'tool',
+  TOOL_OVERFLOW: 'toolOverflow',
 } as const;
 
 // Edge type identifiers

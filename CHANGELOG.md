@@ -6,6 +6,30 @@ All notable changes to gridctl will be documented in this file.
 
 ### Added
 
+- **Tool fan-out in the Topology view.** Each MCP server node now has an
+  expand chevron; clicking it fans that server's tools out as nodes in a local
+  column to the server's right, and clicking again collapses them. Fan-out is
+  an explicit per-server action independent of the client path highlight, and
+  multiple servers can be expanded at once. The fan-out is capped at 10 tool
+  nodes; a server with more collapses the remainder into a single "+N more"
+  node whose in-node popover lists the hidden tools, so an 80-tool server never
+  starbursts the canvas. Tool nodes are sourced from the existing server tool
+  data (no new backend endpoint), slide in when mounted, and are laid out
+  locally so expanding never reflows the three-column backbone. Tool pills use
+  the neutral linked-client theme (not the violet server theme), so tools read
+  as a distinct tier from the servers they belong to, and long tool names
+  truncate with the full name in a tooltip. Server -> tool edges are
+  non-highlightable, so they stay out of the client-reach highlight. Expansion
+  state lives in the stack store and survives polling refreshes. When multiple
+  servers are expanded, their tools share one column and each server's tools
+  form a vertical band stacked in server order, so the per-server edge bundles
+  do not cross. A focused client's reachable servers carry their highlight onto
+  their fanned-out tools, so expanding a reachable server while a client is
+  selected shows its tools at full opacity (tools of out-of-scope servers stay
+  dimmed). Selecting a client zooms the view to fit its reachable subgraph,
+  re-fitting as servers are expanded; clicking empty canvas zooms back out to
+  the whole graph.
+
 - **Multi-hop client path highlight in the Topology view.** Clicking a client
   node now lights up its full transitive reach (client → gateway → the servers
   it can reach) and fades everything outside that path (resources, skill
