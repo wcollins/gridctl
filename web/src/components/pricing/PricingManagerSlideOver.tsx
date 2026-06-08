@@ -6,7 +6,9 @@ import { updateDefaultModel } from '../../lib/api';
 import { ModelPicker } from './ModelPicker';
 import { ClientModelCell } from './ClientModelCell';
 import { ServerModelCell } from './ServerModelCell';
+import { EffectiveModelTag } from './EffectiveModelTag';
 import { MODEL_PRECEDENCE_HINT, SNAPSHOT_NOTE } from './constants';
+import type { EffectiveModel } from '../../types';
 
 export interface PricingManagerSlideOverProps {
   open: boolean;
@@ -18,6 +20,9 @@ export interface PricingManagerSlideOverProps {
   /** Declared clients plus clients observed in cost/token data. */
   clients: Array<{ name: string; declaredModel?: string }>;
   costAttribution: boolean;
+  /** Read-only effective model + provenance per client / server (optional). */
+  effectiveClientModels?: Record<string, EffectiveModel>;
+  effectiveServerModels?: Record<string, EffectiveModel>;
   onClientSaved: (client: string, model: string) => void;
   onServerSaved: (server: string, model: string) => void;
   onDefaultSaved: (model: string) => void;
@@ -42,32 +47,39 @@ export function PricingManagerSlideOver({
   servers,
   clients,
   costAttribution,
+  effectiveClientModels,
+  effectiveServerModels,
   onClientSaved,
   onServerSaved,
   onDefaultSaved,
 }: PricingManagerSlideOverProps) {
   return (
-    <SlideOver isOpen={open} onClose={onClose} title="Pricing models" widthClass="w-[400px]">
-      <div className="flex flex-col gap-5 px-4 py-4">
-        <p className="text-[11px] text-text-muted leading-relaxed">{MODEL_PRECEDENCE_HINT}</p>
+    <SlideOver isOpen={open} onClose={onClose} title="Pricing models" widthClass="w-[520px]">
+      <div className="flex flex-col gap-6 px-5 py-5">
+        <p className="text-xs text-text-muted leading-relaxed">{MODEL_PRECEDENCE_HINT}</p>
 
         <TierSection
-          icon={<Users size={12} className="text-text-muted" />}
+          icon={<Users size={14} className="text-text-muted" />}
           title="1 · Client models"
           note="Pricing only. Does not create access restrictions or require a clients: block."
         >
           {clients.length === 0 ? (
-            <p className="text-[10px] text-text-muted/60 italic">
+            <p className="text-[11px] text-text-muted/60 italic">
               No clients observed yet. Clients appear after their first tool call.
             </p>
           ) : (
             clients.map((c) => (
-              <TierRow key={c.name} name={c.name}>
+              <TierRow key={c.name} name={c.name} effective={c.declaredModel ? effectiveClientModels?.[c.name] : undefined}>
+                {/* The manager's job is editing, so the cell keeps its
+                    editable affordance for undeclared rows; mixed/none
+                    provenance surfaces in the read-only Effective sub-line
+                    (drift) rather than replacing the editor. */}
                 <ClientModelCell
                   client={c.name}
                   declaredModel={c.declaredModel}
                   costAttribution={costAttribution}
                   onSaved={onClientSaved}
+                  pickerAlign="right"
                 />
               </TierRow>
             ))
@@ -75,20 +87,21 @@ export function PricingManagerSlideOver({
         </TierSection>
 
         <TierSection
-          icon={<Server size={12} className="text-text-muted" />}
+          icon={<Server size={14} className="text-text-muted" />}
           title="2 · Server models"
           note="A server without its own model inherits the gateway default."
         >
           {servers.length === 0 ? (
-            <p className="text-[10px] text-text-muted/60 italic">No MCP servers in the stack.</p>
+            <p className="text-[11px] text-text-muted/60 italic">No MCP servers in the stack.</p>
           ) : (
             servers.map((s) => (
-              <TierRow key={s.name} name={s.name}>
+              <TierRow key={s.name} name={s.name} effective={s.declaredModel ? effectiveServerModels?.[s.name] : undefined}>
                 <ServerModelCell
                   server={s.name}
                   declaredModel={s.declaredModel}
                   defaultModel={defaultModel}
                   onSaved={onServerSaved}
+                  pickerAlign="right"
                 />
               </TierRow>
             ))
@@ -96,16 +109,16 @@ export function PricingManagerSlideOver({
         </TierSection>
 
         <TierSection
-          icon={<Globe size={12} className="text-text-muted" />}
+          icon={<Globe size={14} className="text-text-muted" />}
           title="3 · Gateway default"
           note="Stack-wide floor: prices every server without its own model."
         >
           <DefaultModelRow defaultModel={defaultModel} onSaved={onDefaultSaved} />
         </TierSection>
 
-        <div className="border-t border-border/30 pt-3 space-y-1.5">
-          <p className="text-[10px] text-text-muted leading-relaxed">{SNAPSHOT_NOTE}</p>
-          <p className="text-[10px] text-text-muted leading-relaxed">
+        <div className="border-t border-border/30 pt-4 space-y-2">
+          <p className="text-[11px] text-text-muted leading-relaxed">{SNAPSHOT_NOTE}</p>
+          <p className="text-[11px] text-text-muted leading-relaxed">
             Unknown IDs record tokens but price as $0. A declared client model is a session
             default and cannot observe mid-session model switches.
           </p>
@@ -128,23 +141,44 @@ function TierSection({
 }) {
   return (
     <section>
-      <div className="flex items-center gap-1.5 mb-1">
+      <div className="flex items-center gap-2 mb-1.5">
         {icon}
-        <h3 className="text-xs font-medium text-text-secondary">{title}</h3>
+        <h3 className="text-sm font-medium text-text-secondary">{title}</h3>
       </div>
-      <p className="text-[11px] text-text-muted mb-2 leading-relaxed">{note}</p>
-      <div className="space-y-1.5">{children}</div>
+      <p className="text-xs text-text-muted mb-2.5 leading-relaxed">{note}</p>
+      <div className="space-y-2">{children}</div>
     </section>
   );
 }
 
-function TierRow({ name, children }: { name: string; children: React.ReactNode }) {
+function TierRow({
+  name,
+  effective,
+  children,
+}: {
+  name: string;
+  effective?: EffectiveModel;
+  children: React.ReactNode;
+}) {
+  // A declared row whose traffic actually priced under a blend of models is
+  // the drift signal worth surfacing read-only beside the editable cell.
+  const showDrift = effective?.provenance === 'mixed';
   return (
-    <div className="flex items-center justify-between gap-3 min-h-[26px]">
-      <span className="text-xs font-mono text-text-primary truncate" title={name}>
-        {name}
-      </span>
-      <div className="flex-shrink-0">{children}</div>
+    <div className="flex flex-col gap-0.5 min-h-[30px] justify-center">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-mono text-text-primary truncate" title={name}>
+          {name}
+        </span>
+        <div className="flex-shrink-0">{children}</div>
+      </div>
+      {showDrift && effective && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[10px] text-text-muted/60 uppercase tracking-wider">Effective</span>
+          <div className="flex-shrink-0">
+            <EffectiveModelTag effective={effective} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
