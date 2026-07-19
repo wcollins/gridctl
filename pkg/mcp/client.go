@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +27,30 @@ type Client struct {
 	sessionID       string        // MCP session ID for stateful servers
 	protocolVersion string        // negotiated at initialize; stamped on subsequent requests
 	pingTimeout     time.Duration // 0 = use DefaultPingTimeout
+	headerSource    HeaderSource  // optional downstream auth header (nil = none)
+}
+
+// SetHeaderSource installs the downstream auth header source. Must be called
+// before Connect/Initialize; the client does not synchronize this field.
+func (c *Client) SetHeaderSource(hs HeaderSource) {
+	c.headerSource = hs
+}
+
+// applyAuthHeader attaches the downstream auth header when a source is set.
+// Source errors abort the request and pass through unchanged so typed errors
+// (e.g. authorization-required) reach the caller.
+func (c *Client) applyAuthHeader(ctx context.Context, req *http.Request) error {
+	if c.headerSource == nil {
+		return nil
+	}
+	name, value, err := c.headerSource.AuthHeader(ctx)
+	if err != nil {
+		return err
+	}
+	if name != "" {
+		req.Header.Set(name, value)
+	}
+	return nil
 }
 
 // setProtocolVersion records the version negotiated at initialize so
@@ -117,8 +142,26 @@ func (c *Client) send(ctx context.Context, method string, params any) error {
 	return err
 }
 
-// sendHTTP sends a request to the downstream agent via HTTP.
+// sendHTTP sends a request to the downstream agent via HTTP. On an auth
+// challenge it invalidates a cached credential and retries exactly once, so
+// an access token that expired mid-session heals silently when a refresh
+// path exists.
 func (c *Client) sendHTTP(ctx context.Context, req jsonrpc.Request) (*jsonrpc.Response, error) {
+	resp, err := c.sendHTTPOnce(ctx, req)
+	if err == nil {
+		return resp, nil
+	}
+	var authErr *AuthRequiredError
+	if errors.As(err, &authErr) {
+		if inv, ok := c.headerSource.(TokenInvalidator); ok && inv.InvalidateToken() {
+			return c.sendHTTPOnce(ctx, req)
+		}
+	}
+	return nil, err
+}
+
+// sendHTTPOnce performs a single HTTP round trip for a JSON-RPC request.
+func (c *Client) sendHTTPOnce(ctx context.Context, req jsonrpc.Request) (*jsonrpc.Response, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request: %w", err)
@@ -130,6 +173,10 @@ func (c *Client) sendHTTP(ctx context.Context, req jsonrpc.Request) (*jsonrpc.Re
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json, text/event-stream")
+
+	if err := c.applyAuthHeader(ctx, httpReq); err != nil {
+		return nil, err
+	}
 
 	// Inject W3C traceparent/tracestate into outgoing request headers.
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(httpReq.Header))
@@ -154,6 +201,9 @@ func (c *Client) sendHTTP(ctx context.Context, req jsonrpc.Request) (*jsonrpc.Re
 
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
+		if authErr := authRequiredFromResponse(httpResp, string(body)); authErr != nil {
+			return nil, authErr
+		}
 		return nil, fmt.Errorf("HTTP %d: %s", httpResp.StatusCode, string(body))
 	}
 
@@ -220,12 +270,41 @@ func (c *Client) Ping(ctx context.Context) error {
 		return err
 	}
 
+	if err := c.applyAuthHeader(ctx, req); err != nil {
+		return err
+	}
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
+	// Reachability is all Ping asserts, with one exception: when this client
+	// has credentials configured, an auth challenge means the server is up
+	// but the credential is missing or rejected, and callers need to
+	// distinguish that from both "ready" and "unreachable". Without
+	// configured credentials the status code stays ignored, preserving the
+	// long-standing behavior for servers that 401 bare GETs (e.g. proxies)
+	// while serving authenticated POST traffic fine.
+	if c.headerSource != nil {
+		if authErr := authRequiredFromResponse(resp, ""); authErr != nil {
+			return authErr
+		}
+	}
+
+	return nil
+}
+
+// authRequiredFromResponse returns an AuthRequiredError for a 401, or for a
+// 403 that carries a WWW-Authenticate challenge (e.g. insufficient_scope).
+// Returns nil for every other response.
+func authRequiredFromResponse(resp *http.Response, body string) *AuthRequiredError {
+	challenge := resp.Header.Get("WWW-Authenticate")
+	if resp.StatusCode == http.StatusUnauthorized ||
+		(resp.StatusCode == http.StatusForbidden && challenge != "") {
+		return &AuthRequiredError{Status: resp.StatusCode, Challenge: challenge, Body: body}
+	}
 	return nil
 }
 

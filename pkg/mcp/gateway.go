@@ -51,6 +51,8 @@ type MCPServerConfig struct {
 	SSHKnownHostsFile string               // SSH known_hosts file path; enables StrictHostKeyChecking=yes
 	SSHJumpHost       string               // SSH jump/bastion host ([user@]host[:port])
 	OpenAPIConfig     *OpenAPIClientConfig // OpenAPI configuration (for OpenAPI servers)
+	Auth              *ServerAuthConfig    // Downstream auth for external URL servers (nil = none)
+	HeaderSource      HeaderSource         // Live auth header source (OAuth broker); overrides Auth's static mapping
 	Tools             []string             // Tool whitelist (empty = all tools)
 	OutputFormat      string               // Output format: "json", "toon", "csv", "text"
 	PinSchemas        *bool                // Override gateway schema pinning (nil = inherit gateway default)
@@ -136,6 +138,9 @@ type Gateway struct {
 	regFailMu            sync.RWMutex
 	registrationFailures map[string]string // name -> error message for servers that failed to register
 
+	authStateMu sync.RWMutex
+	authState   map[string]ServerAuthState // name -> downstream authorization state
+
 	toolCallObserver  ToolCallObserver  // optional observer for tool call metrics
 	promptGetObserver PromptGetObserver // optional observer for prompt-get (skill usage) metrics
 
@@ -178,6 +183,7 @@ func NewGateway() *Gateway {
 		blockedServers:       make(map[string]bool),
 		autoscalers:          make(map[string]*Autoscaler),
 		registrationFailures: make(map[string]string),
+		authState:            make(map[string]ServerAuthState),
 	}
 }
 
@@ -580,6 +586,15 @@ func (g *Gateway) checkReplicaHealth(ctx context.Context, serverName string, rep
 		replica.SetHealthy(true)
 		replica.Restart().Reset()
 		return
+	}
+
+	// A broker-managed auth failure that survived the transport's silent
+	// refresh-retry means the authorization itself is gone: surface
+	// needs-auth (the actionable state) alongside the unhealthy marker.
+	// Raw challenges from non-broker servers stay plain unhealthy.
+	var needsAuth *NeedsAuthError
+	if errors.As(err, &needsAuth) {
+		g.markNeedsAuthIfNew(serverName, "authorization required")
 	}
 
 	// Unhealthy: exclude from dispatch and try to restart if eligible.
@@ -1078,6 +1093,11 @@ func (g *Gateway) buildAgentClient(ctx context.Context, cfg MCPServerConfig) (Ag
 			httpClient := NewClient(cfg.Name, cfg.Endpoint)
 			httpClient.SetLogger(clientLogger)
 			httpClient.SetPingTimeout(cfg.PingTimeout)
+			if cfg.HeaderSource != nil {
+				httpClient.SetHeaderSource(cfg.HeaderSource)
+			} else if hs := StaticHeaderSourceFor(cfg.Auth); hs != nil {
+				httpClient.SetHeaderSource(hs)
+			}
 			if len(cfg.Tools) > 0 {
 				httpClient.SetToolWhitelist(cfg.Tools)
 			}
@@ -1091,6 +1111,11 @@ func (g *Gateway) buildAgentClient(ctx context.Context, cfg MCPServerConfig) (Ag
 			httpClient := NewClient(cfg.Name, cfg.Endpoint)
 			httpClient.SetLogger(clientLogger)
 			httpClient.SetPingTimeout(cfg.PingTimeout)
+			if cfg.HeaderSource != nil {
+				httpClient.SetHeaderSource(cfg.HeaderSource)
+			} else if hs := StaticHeaderSourceFor(cfg.Auth); hs != nil {
+				httpClient.SetHeaderSource(hs)
+			}
 			if len(cfg.Tools) > 0 {
 				httpClient.SetToolWhitelist(cfg.Tools)
 			}
@@ -1150,18 +1175,89 @@ func (g *Gateway) UnregisterMCPServer(name string) {
 	delete(g.serverMeta, name)
 	g.mu.Unlock()
 	g.ClearRegistrationFailure(name)
+	// Auth state follows the same lifecycle as registration failures:
+	// without this, a removed server would keep a ghost needs-auth row in
+	// Status() (stored grants are unaffected; they are keyed by resource
+	// URL, not server name).
+	g.ClearServerAuthState(name)
 }
 
 // RecordRegistrationFailure records why a server could not be registered so
 // Status() surfaces it instead of silently omitting the server. A later
 // attempt overwrites the entry; success or unregistration clears it.
+//
+// Broker-managed auth failures (NeedsAuthError: the server has an OAuth
+// auth block and no usable grant) are routed to the needs-auth state
+// instead: a server waiting on user authorization is actionable, not
+// broken, and 'gridctl auth login' fixes it. A raw challenge from a server
+// the broker does not manage (wrong static bearer token, or a server with
+// no auth block at all) stays a registration failure — pointing such users
+// at auth login would dead-end, since the broker has no configuration for
+// the server — with a hint naming the stack.yaml fix.
 func (g *Gateway) RecordRegistrationFailure(name string, err error) {
 	if name == "" || err == nil {
 		return
 	}
+	var needsAuth *NeedsAuthError
+	if errors.As(err, &needsAuth) {
+		g.markNeedsAuthIfNew(name, "authorization required")
+		g.ClearRegistrationFailure(name)
+		return
+	}
+	msg := err.Error()
+	var authErr *AuthRequiredError
+	if errors.As(err, &authErr) {
+		msg += "; if this server requires OAuth, add 'auth: {type: oauth}' to it in stack.yaml"
+	}
 	g.regFailMu.Lock()
-	g.registrationFailures[name] = err.Error()
+	g.registrationFailures[name] = msg
 	g.regFailMu.Unlock()
+}
+
+// isAuthError reports whether err (anywhere in its chain) is an auth
+// challenge from the transport or a missing-grant error from the broker.
+// Both mean "reachable but unauthorized", which readiness waits abort on.
+func isAuthError(err error) bool {
+	var authErr *AuthRequiredError
+	var needsAuth *NeedsAuthError
+	return errors.As(err, &authErr) || errors.As(err, &needsAuth)
+}
+
+// markNeedsAuthIfNew transitions a server to needs-auth unless it is
+// already there; an existing entry usually carries a more specific reason
+// from the broker (e.g. "authorization expired") that must not be
+// overwritten with a generic one.
+func (g *Gateway) markNeedsAuthIfNew(name, reason string) {
+	if st, ok := g.ServerAuthState(name); ok && st.Status == AuthStatusNeedsAuth {
+		return
+	}
+	g.SetServerAuthState(name, ServerAuthState{Status: AuthStatusNeedsAuth, Error: reason})
+}
+
+// SetServerAuthState records downstream authorization state for a server.
+func (g *Gateway) SetServerAuthState(name string, st ServerAuthState) {
+	if name == "" {
+		return
+	}
+	g.authStateMu.Lock()
+	g.authState[name] = st
+	g.authStateMu.Unlock()
+}
+
+// ServerAuthState returns the recorded downstream authorization state for a
+// server and whether one exists.
+func (g *Gateway) ServerAuthState(name string) (ServerAuthState, bool) {
+	g.authStateMu.RLock()
+	st, ok := g.authState[name]
+	g.authStateMu.RUnlock()
+	return st, ok
+}
+
+// ClearServerAuthState removes the recorded downstream authorization state.
+func (g *Gateway) ClearServerAuthState(name string) {
+	g.authStateMu.Lock()
+	delete(g.authState, name)
+	g.authStateMu.Unlock()
 }
 
 // ClearRegistrationFailure removes any recorded registration failure for name.
@@ -1290,9 +1386,16 @@ func (g *Gateway) waitForHTTPServer(ctx context.Context, client *Client, timeout
 			return fmt.Errorf("%w after %s (ready_timeout=%s); set ready_timeout on the server config to wait longer",
 				ErrReadyTimeout, time.Since(start).Round(time.Millisecond), timeout)
 		case <-ticker.C:
-			if err := client.Ping(ctx); err == nil {
+			err := client.Ping(ctx)
+			if err == nil {
 				g.logger.Debug("MCP server ready", "name", client.Name(), "wait", time.Since(start))
 				return nil
+			}
+			// An auth challenge (or a broker with no grant yet) means the
+			// server is reachable but wants authorization; retrying until
+			// the ready timeout would only mask that. Surface immediately.
+			if isAuthError(err) {
+				return err
 			}
 		}
 	}
@@ -1970,6 +2073,15 @@ type MCPServerStatus struct {
 	// their stack YAML. Reports current min/max/target/median and the
 	// last scaler decision so operators can reason about scale events.
 	Autoscale *AutoscaleStatus `json:"autoscale,omitempty"`
+
+	// AuthStatus reports downstream authorization state for external servers
+	// with OAuth brokering: "authorized" or "needs_auth". Empty for servers
+	// without tracked auth state. A needs_auth server is actionable (run
+	// 'gridctl auth login <name>'), not failed, and carries neither
+	// RegistrationFailed nor Healthy=false on that account.
+	AuthStatus string     `json:"authStatus,omitempty"`
+	AuthIssuer string     `json:"authIssuer,omitempty"` // authorization server issuer, when known
+	AuthExpiry *time.Time `json:"authExpiry,omitempty"` // access token expiry, when known
 }
 
 // ReplicaStatus reports the live state of a single replica within a
@@ -2176,6 +2288,14 @@ func (g *Gateway) Status() []MCPServerStatus {
 		}
 		g.healthMu.RUnlock()
 
+		g.authStateMu.RLock()
+		if st, ok := g.authState[name]; ok {
+			status.AuthStatus = st.Status
+			status.AuthIssuer = st.Issuer
+			status.AuthExpiry = st.Expiry
+		}
+		g.authStateMu.RUnlock()
+
 		status.Replicas = g.ReplicaStatuses(name)
 
 		if scaler := g.GetAutoscaler(name); scaler != nil {
@@ -2194,6 +2314,7 @@ func (g *Gateway) Status() []MCPServerStatus {
 		if seen[name] {
 			continue
 		}
+		seen[name] = true
 		failed := false
 		statuses = append(statuses, MCPServerStatus{
 			Name:               name,
@@ -2204,6 +2325,25 @@ func (g *Gateway) Status() []MCPServerStatus {
 		})
 	}
 	g.regFailMu.RUnlock()
+
+	// Servers waiting on authorization have no router client either; surface
+	// them as actionable needs-auth rows, never as errors. Healthy stays nil
+	// (no health check has meaningfully run against an unauthorized server).
+	g.authStateMu.RLock()
+	for name, st := range g.authState {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		statuses = append(statuses, MCPServerStatus{
+			Name:       name,
+			Tools:      []string{},
+			AuthStatus: st.Status,
+			AuthIssuer: st.Issuer,
+			AuthExpiry: st.Expiry,
+		})
+	}
+	g.authStateMu.RUnlock()
 
 	sort.Slice(statuses, func(i, j int) bool { return statuses[i].Name < statuses[j].Name })
 	return statuses

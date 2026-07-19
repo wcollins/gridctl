@@ -16,6 +16,7 @@ import (
 	"github.com/gridctl/gridctl/pkg/dockerclient"
 	"github.com/gridctl/gridctl/pkg/logging"
 	"github.com/gridctl/gridctl/pkg/mcp"
+	"github.com/gridctl/gridctl/pkg/mcpauth"
 	"github.com/gridctl/gridctl/pkg/metrics"
 	"github.com/gridctl/gridctl/pkg/pins"
 	"github.com/gridctl/gridctl/pkg/provisioner"
@@ -85,6 +86,11 @@ type Server struct {
 	prober       *probe.Prober
 	probeLimiter *probeLimiter
 
+	// oauthBroker handles downstream OAuth for external servers. Nil
+	// disables the /api/servers/{name}/auth/* endpoints and the
+	// /oauth/callback route.
+	oauthBroker *mcpauth.Broker
+
 	// Skill source paths. Empty values fall back to the global defaults
 	// (skills.LockFilePath / skills.SkillsConfigPath / skills.UpdateCachePath)
 	// so production code is unchanged; tests inject temp paths to stay
@@ -153,6 +159,13 @@ func (s *Server) SetAuth(authType, token, header string) {
 	s.authType = authType
 	s.authToken = token
 	s.authHeader = header
+}
+
+// SetOAuthBroker wires the downstream OAuth broker: enables the
+// /api/servers/{name}/auth/* endpoints and mounts the /oauth/callback
+// route (outside the inbound auth middleware).
+func (s *Server) SetOAuthBroker(b *mcpauth.Broker) {
+	s.oauthBroker = b
 }
 
 // SetProvisionerRegistry sets the provisioner registry for client detection.
@@ -358,6 +371,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/mcp-servers/{name}/model", s.handleSetServerModel)
 	mux.HandleFunc("PUT /api/gateway/default-model", s.handleSetDefaultModel)
 	mux.HandleFunc("/api/mcp-servers", s.handleMCPServers)
+	mux.HandleFunc("GET /api/auth/servers", s.handleAuthServers)
+	mux.HandleFunc("POST /api/servers/{name}/auth/login", s.handleAuthLogin)
+	mux.HandleFunc("GET /api/servers/{name}/auth/wait", s.handleAuthWait)
+	mux.HandleFunc("POST /api/servers/{name}/auth/manual", s.handleAuthManual)
+	mux.HandleFunc("POST /api/servers/{name}/auth/logout", s.handleAuthLogout)
+	mux.HandleFunc("POST /api/servers/{name}/auth/reset", s.handleAuthReset)
 	mux.HandleFunc("/api/tools", s.handleTools)
 	mux.HandleFunc("GET /api/tools/catalog", s.handleToolsCatalog)
 	mux.HandleFunc("GET /api/tools/usage", s.handleToolsUsage)
@@ -495,6 +514,18 @@ func (s *Server) Handler() http.Handler {
 	}
 
 	handler := authMiddleware(s.authType, s.authToken, s.authHeader, mux)
+
+	// The OAuth authorization callback mounts OUTSIDE the inbound auth
+	// middleware: the browser performing the redirect carries no gateway
+	// bearer token, and the route authenticates via its single-use state
+	// parameter instead. Nothing else escapes the middleware.
+	if s.oauthBroker != nil {
+		inner := handler
+		outer := http.NewServeMux()
+		outer.Handle("GET "+mcpauth.CallbackPath, s.oauthBroker.CallbackHandler())
+		outer.Handle("/", inner)
+		handler = outer
+	}
 
 	var extraHeaders []string
 	if s.authHeader != "" && s.authHeader != "Authorization" {
@@ -699,6 +730,12 @@ type MCPServerStatus struct {
 
 	Replicas  []mcp.ReplicaStatus  `json:"replicas,omitempty"`
 	Autoscale *mcp.AutoscaleStatus `json:"autoscale,omitempty"`
+
+	// AuthStatus reports downstream authorization state ("authorized" or
+	// "needs_auth"); empty for servers without tracked auth state.
+	AuthStatus string     `json:"authStatus,omitempty"`
+	AuthIssuer string     `json:"authIssuer,omitempty"`
+	AuthExpiry *time.Time `json:"authExpiry,omitempty"`
 }
 
 func (s *Server) getMCPServerStatuses() []MCPServerStatus {
@@ -729,6 +766,9 @@ func (s *Server) getMCPServerStatuses() []MCPServerStatus {
 			Model:              declaredModels[ms.Name],
 			Replicas:           ms.Replicas,
 			Autoscale:          ms.Autoscale,
+			AuthStatus:         ms.AuthStatus,
+			AuthIssuer:         ms.AuthIssuer,
+			AuthExpiry:         ms.AuthExpiry,
 		}
 		if ms.LastCheck != nil {
 			ts := ms.LastCheck.Format(time.RFC3339)
